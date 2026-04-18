@@ -7,7 +7,7 @@ export async function GET() {
       status: r.status,
       headers: { "content-type": "application/json" },
     })
-  } catch (e) {
+  } catch {
     return Response.json(
       { status: "error", message: "upstream unreachable", upstream: API },
       { status: 502 }
