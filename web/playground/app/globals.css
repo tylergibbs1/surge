@@ -122,8 +122,18 @@
     }
   body {
     @apply bg-background text-foreground;
+    /* Crisper text on macOS; harmless on other platforms. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     }
   html {
     @apply font-sans;
+    }
+  /* Headings read better when wrapping is balanced across lines. */
+  h1, h2, h3 {
+    text-wrap: balance;
+    }
+  p {
+    text-wrap: pretty;
     }
 }

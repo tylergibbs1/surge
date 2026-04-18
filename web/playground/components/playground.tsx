@@ -4,6 +4,8 @@ import dynamic from "next/dynamic"
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 
+import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
+import { RefreshIcon } from "@/components/refresh-icon"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -20,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
-import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
 import { BAS, type ForecastResponse } from "@/lib/types"
 
 // Recharts + our chart component weigh ~100KB gzipped and are only useful
@@ -97,7 +98,7 @@ export function Playground() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-muted-foreground text-xs font-medium uppercase">
+            <label className="text-muted-foreground text-xs font-medium uppercase tabular-nums">
               Forecast horizon — {horizon} hours ({(horizon / 24).toFixed(1)} days)
             </label>
             <Slider
@@ -132,15 +133,17 @@ export function Playground() {
             disabled={isLoading}
             size="sm"
             variant="outline"
+            className="gap-2 transition-transform duration-100 active:scale-[0.96]"
           >
-            {isLoading ? "loading…" : "Refresh"}
+            <RefreshIcon loading={isLoading} />
+            Refresh
           </Button>
         </div>
 
         {data ? <ForecastChart forecast={data} /> : <ForecastChartSkeleton />}
 
         {stats ? (
-          <div className="text-muted-foreground grid grid-cols-2 gap-4 border-t pt-4 text-sm md:grid-cols-3">
+          <div className="text-muted-foreground grid grid-cols-2 gap-4 border-t pt-4 text-sm tabular-nums md:grid-cols-3">
             <div>
               <div className="text-xs uppercase">Peak</div>
               <div className="text-foreground font-mono text-base">
