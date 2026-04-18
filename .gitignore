@@ -57,3 +57,5 @@ web/playground/out/
 web/playground/bun.lock
 web/**/*.log
 web/**/.env.local
+._*
+.DS_Store
