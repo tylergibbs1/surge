@@ -6,7 +6,7 @@ Next.js playground can call it on-demand without running a 24/7 server.
 ## Prerequisites
 
 1. **Model published to Hugging Face** — the handler loads from
-   `surge-grid/chronos2-full-v2` by default. If you haven't pushed, either
+   `Tylerbry1/surge-fm-v2` by default. If you haven't pushed, either
    (a) bake the model into the Docker image locally, or (b) point
    `SURGE_MODEL_HF_ID` at any other public Chronos-2 checkpoint.
 2. **RunPod account + API key**.

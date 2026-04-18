@@ -17,11 +17,15 @@ import polars as pl
 from surge import store
 
 
+# Prefer HF Hub (so users don't need to download 478 MB before running). If
+# a local path override is set, use that (e.g. during offline dev or CI).
+_DEFAULT_HF = "Tylerbry1/surge-fm-v2"
+_LOCAL_FALLBACK = Path(__file__).resolve().parents[3] / "models" / "chronos2_full_v2"
 MODEL_PATH = os.environ.get(
     "SURGE_MODEL_PATH",
-    str(Path(__file__).resolve().parents[3] / "models" / "chronos2_full_v2"),
+    str(_LOCAL_FALLBACK) if _LOCAL_FALLBACK.exists() else _DEFAULT_HF,
 )
-MODEL_NAME = "chronos-2-ft-v2"
+MODEL_NAME = "surge-fm-v2"
 CONTEXT_LENGTH = 2048
 
 US_HOLIDAYS = holidays.UnitedStates()

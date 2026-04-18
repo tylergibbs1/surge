@@ -4,7 +4,7 @@ Deployment (GitHub direct):
     RunPod → Serverless → Deploy from GitHub → point at this repo
     Command:   python -u runpod/handler.py
     GPU:       any (CPU also works; Chronos-2 is ~120M params)
-    Env vars:  SURGE_MODEL_HF_ID  (default: surge-grid/chronos2-full-v2)
+    Env vars:  SURGE_MODEL_HF_ID  (default: Tylerbry1/surge-fm-v2)
                SURGE_DATA_URL     (optional; where to pull live load + weather from)
 
 Request shape:
@@ -26,7 +26,7 @@ from chronos import BaseChronosPipeline
 
 # The pipeline is loaded once at worker startup (module-import time) and
 # reused across requests for the lifetime of that worker.
-MODEL_ID = os.environ.get("SURGE_MODEL_HF_ID", "surge-grid/chronos2-full-v2")
+MODEL_ID = os.environ.get("SURGE_MODEL_HF_ID", "Tylerbry1/surge-fm-v2")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.bfloat16 if DEVICE == "cuda" else torch.float32
 

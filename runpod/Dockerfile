@@ -22,7 +22,7 @@ RUN pip install -e ".[api]" runpod
 
 # Optional: pre-download the model at build time so cold starts don't fetch
 # it. Set SURGE_MODEL_HF_ID at build time to bake it in.
-ARG SURGE_MODEL_HF_ID=surge-grid/chronos2-full-v2
+ARG SURGE_MODEL_HF_ID=Tylerbry1/surge-fm-v2
 RUN python -c "from chronos import BaseChronosPipeline; BaseChronosPipeline.from_pretrained('${SURGE_MODEL_HF_ID}')"
 
 CMD ["python", "-u", "runpod/handler.py"]

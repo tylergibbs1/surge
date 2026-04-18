@@ -38,8 +38,8 @@ print(df.head())
 
 ```bash
 pip install -e ".[api]"
-python -m surge.ingest --days 90                    # populate data store
-# ... download model checkpoint (see docs/models.md)
+python -m surge.ingest --days 90    # populate data store
+# checkpoint auto-downloads from https://huggingface.co/Tylerbry1/surge-fm-v2
 uvicorn surge.api.main:app --port 8000
 
 # 24-hour probabilistic forecast for PJM
