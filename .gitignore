@@ -49,3 +49,11 @@ experiments/run.log
 
 # Notebooks
 .ipynb_checkpoints/
+
+# Web — keep repo lean; users run bun install themselves
+web/playground/node_modules/
+web/playground/.next/
+web/playground/out/
+web/playground/bun.lock
+web/**/*.log
+web/**/.env.local
