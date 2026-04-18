@@ -1,0 +1,27 @@
+{
+  "tag": "apr18",
+  "goal": "Minimise MASE on 2025 PJM hourly load test set, 24h-ahead forecasts.",
+  "metric": "mase",
+  "metric_direction": "lower",
+  "target": 0.31,
+  "success": {
+    "beat_seasonal_naive_by_pct": 40,
+    "finetune_over_zeroshot_by_pct": 5
+  },
+  "run_command": "ssh -p 13064 -i ~/.ssh/id_ed25519 root@103.207.149.110 'cd /workspace/surge && SURGE_DATA_DIR=/workspace/data python -m experiments.run $EXP_NAME $CONFIG_JSON'",
+  "modifiable_files": [
+    "experiments/models.py",
+    "experiments/run.py",
+    "experiments/eval.py"
+  ],
+  "readonly_files": [
+    "src/surge/store.py",
+    "src/surge/scrapers/eia.py"
+  ],
+  "timeout_seconds": 1200,
+  "no_new_dependencies": false,
+  "stop_conditions": {
+    "wall_clock_minutes": 90,
+    "no_improvement_streak": 3
+  }
+}

@@ -1,0 +1,78 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "surge"
+version = "0.0.1"
+description = "Open forecasts and simulations for the US power grid"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Surge contributors" }]
+keywords = ["grid", "energy", "forecasting", "electricity", "iso", "eia"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "httpx>=0.27",
+    "polars>=1.0",
+    "pyarrow>=16.0",
+    "pydantic>=2.6",
+    "tenacity>=9.0",
+    "platformdirs>=4.0",
+    "tqdm>=4.66",
+    "zstandard>=0.22",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-vcr>=1.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+weather = ["herbie-data>=2024.3", "cdsapi>=0.7"]
+cli = ["typer>=0.12", "rich>=13.7"]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "chronos-forecasting",
+    "torch>=2.4",
+    "holidays>=0.55",
+]
+all = ["surge[dev,weather,cli,api]"]
+
+[project.scripts]
+surge = "surge.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/surge-grid/surge"
+Repository = "https://github.com/surge-grid/surge"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/surge"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true

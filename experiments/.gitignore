@@ -1,0 +1,4 @@
+results.tsv
+run.log
+*.pyc
+__pycache__/

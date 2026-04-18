@@ -1,0 +1,51 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+build/
+dist/
+.eggs/
+*.egg
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Surge cache / data
+.surge_cache/
+data/
+*.parquet
+*.csv
+!tests/**/*.csv
+!tests/**/*.parquet
+
+# Model checkpoints — live on HuggingFace Hub, not in git
+models/
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+
+# Local logs
+run.log
+experiments/results.tsv
+experiments/run.log
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Notebooks
+.ipynb_checkpoints/
