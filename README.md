@@ -6,6 +6,12 @@ A fine-tuned Chronos-2 foundation model + FastAPI service covering 7 major US
 balancing authorities (PJM, CISO, ERCO, MISO, NYIS, ISNE, SWPP). Public data
 only, one-command deploy, permissive license.
 
+![Day-ahead forecast vs. reality for 7 US grids](docs/plots/hero_forecast.png)
+
+*Chronos-2 fine-tuned on 7 years of EIA-930 load + ASOS temperature + calendar
+features. Dashed line = median forecast, shaded band = 80% probability
+interval, solid = actual. Macro 3.7% MAPE on the 2025 peak week.*
+
 ## What it is
 
 - `surge` — Python library for pulling and harmonising US grid data
@@ -61,6 +67,8 @@ Response:
 
 ## Accuracy vs. the status quo
 
+![Surge vs. every classical and foundation baseline](docs/plots/leaderboard.png)
+
 | Model | Test MASE | vs. seasonal-naive-24 | Cost |
 |---|---:|---:|---|
 | seasonal-naive-24 (baseline) | 1.044 | — | — |
@@ -74,6 +82,15 @@ Response:
 
 All numbers: 7-BA macro average, 2025 hold-out, 367 rolling 24h-ahead windows,
 MASE denominator = per-BA train-set seasonal-naive (m=24).
+
+## How far ahead can it forecast?
+
+![Horizon degradation curve](docs/plots/horizon_curve.png)
+
+Chronos-2 beats seasonal-naive-24 out to **~70 hours (≈ 2.9 days)** ahead.
+Beyond that, weekly patterns win. Useful-horizon ceiling without adding
+weather forecasts is therefore roughly 3 days; extending it further requires
+HRRR/GFS weather as future covariates.
 
 ## Status
 
