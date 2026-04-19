@@ -76,11 +76,17 @@ function buildRows(
   const forecastStartMs = forecastFirst ? Date.parse(forecastFirst.ts_utc) : 0
 
   if (actuals) {
+    // Dedupe on ts_ms defensively — duplicate timestamps (from a cached
+    // response or a stale upstream dedupe miss) crash Recharts with
+    // "two children with the same key" on XAxis tick generation.
+    const seen = new Set<number>()
     for (const a of actuals.points) {
       const ts_ms = Date.parse(a.ts_utc)
       // Trim any actuals that overlap with the forecast window — the
       // forecast is the authority beyond its start.
       if (ts_ms >= forecastStartMs) continue
+      if (seen.has(ts_ms)) continue
+      seen.add(ts_ms)
       rows.push({
         ts_ms,
         load: a.load_mw / 1000,

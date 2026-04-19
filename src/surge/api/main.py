@@ -216,6 +216,14 @@ def actuals_one(
             .filter(pl.col("load_mw").is_not_null())
             .filter(pl.col("load_mw") > 0)
             .filter(pl.col("load_mw") < 200_000)
+            # Dedupe on ts_utc: `store.append` isn't idempotent, so
+            # overlapping ingest windows write the same row twice.
+            # Duplicate rows crash the frontend chart with "two children
+            # with the same key" when Recharts generates axis ticks.
+            # Prefer the most recently-written copy so in-place EIA
+            # revisions land. Mirror of live_load.py's dedupe.
+            .sort(["ts_utc", "as_of"], descending=[False, True])
+            .unique(subset=["ts_utc"], keep="first")
             .sort("ts_utc")
             .tail(hours)
             .collect()
