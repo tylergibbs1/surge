@@ -1,0 +1,36 @@
+name: bake
+on:
+  schedule:
+    # 06:15 UTC — a bit after EIA-930 publishes its overnight batch so the
+    # bake picks up fresh demand history on the first try of the day.
+    - cron: "15 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bake:
+    runs-on: ubuntu-latest
+    # The endpoint itself can take up to 5 min (53 BAs × Modal inference,
+    # including cold starts). Give the curl room to wait.
+    timeout-minutes: 10
+    steps:
+      - name: Trigger bake endpoint
+        env:
+          BAKE_URL: ${{ secrets.BAKE_URL }}
+          BAKE_SECRET: ${{ secrets.BAKE_SECRET }}
+        run: |
+          if [ -z "$BAKE_URL" ] || [ -z "$BAKE_SECRET" ]; then
+            echo "::error::BAKE_URL and BAKE_SECRET must be set as repo secrets."
+            exit 1
+          fi
+          # --max-time matches the Next.js maxDuration (300s) plus a small
+          # network cushion. -fS turns non-2xx into a curl failure so the
+          # job exits non-zero on partial bakes (207) or errors.
+          curl -fS --max-time 320 \
+            -X POST "$BAKE_URL" \
+            -H "Authorization: Bearer $BAKE_SECRET" \
+            -H "Accept: application/json" \
+            -o /tmp/bake_result.json
+          jq '.ok, .fail, .elapsed_ms' < /tmp/bake_result.json

@@ -1,23 +1,37 @@
-// Auto-selects between local FastAPI and RunPod serverless based on env:
-//   - SURGE_API_URL starts with "https://api.runpod.ai" → POST /runsync with bearer
-//   - anything else (default Modal) → GET /forecast/{ba}
-// Zero code change to switch — set vars in .env.local.
+// Day-ahead forecast API. Two-tier serving:
+//
+//   1. Baked JSON from Vercel Blob — daily bake writes horizon=168 to
+//      forecasts/{BA}.json via /api/bake. When a cache hit lands we slice
+//      to the requested horizon and return in ~20 ms from the Vercel edge.
+//
+//   2. Live inference fallback — Modal (default) or RunPod, used when the
+//      baked payload is missing, older than ~25 h, or the client passed
+//      ?force=1 (e.g. for a custom horizon beyond what was baked).
+//
+// Mode is transparent to the client; the `x-surge-backend` response header
+// reports which path was used.
 
 import { NextRequest } from "next/server"
 
 import { BAS, type BaCode } from "@/lib/us-grid-geo"
 
-// Default to the Modal-hosted FastAPI so users cloning the repo get a
-// working demo without running anything locally. Override with
-// SURGE_API_URL=http://127.0.0.1:8000 for local dev.
 const API =
   process.env.SURGE_API_URL ??
   "https://tylergibbs1--surge-api-fastapi-app.modal.run"
 const RUNPOD_KEY = process.env.RUNPOD_API_KEY
 
-// Host allow-list: prevents bearer-token exfil or SSRF to cloud metadata
-// endpoints if SURGE_API_URL is ever misconfigured. localhost is allowed
-// for dev; prod must be https to one of the known providers.
+// Hostname of the Vercel Blob store's public CDN. Injected by Vercel when
+// a Blob store is linked to the project — falls back to undefined on
+// local dev, in which case we skip straight to live inference.
+const BLOB_BASE_URL = process.env.BLOB_BASE_URL
+
+// Max age of a baked payload we'll serve. Bake runs once a day (~06:15 UTC);
+// 25 h gives headroom for delayed or retried cron runs without serving
+// genuinely stale forecasts on multi-day outages.
+const BAKED_MAX_AGE_MS = 25 * 60 * 60 * 1000
+
+// Host allow-list: prevents bearer-token exfil or SSRF if SURGE_API_URL
+// is misconfigured. Vercel Blob's public CDN is whitelisted separately.
 const ALLOWED_UPSTREAM_HOSTS = new Set([
   "tylergibbs1--surge-api-fastapi-app.modal.run",
   "api.runpod.ai",
@@ -34,15 +48,10 @@ const ALLOWED_UPSTREAM_HOSTS = new Set([
       throw new Error(`upstream host ${u.hostname} not in allow-list`)
     }
   } catch (e) {
-    // Fail the module import — better than silently routing creds to an
-    // arbitrary attacker-controlled URL at runtime.
     throw new Error(`invalid SURGE_API_URL=${API}: ${String(e)}`)
   }
 })()
 
-// Next.js 16 sets `Cache-Control: private, no-cache, no-store` on dynamic
-// route handlers by default. Override on successful responses so Vercel's
-// edge + browsers cache for 5 min / 60 s respectively.
 const CACHE_HEADERS = {
   "cache-control":
     "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
@@ -50,21 +59,73 @@ const CACHE_HEADERS = {
 
 const BA_SET = new Set<string>(BAS as readonly string[])
 
+type ForecastResponse = {
+  ba: string
+  model: string
+  as_of_utc: string
+  context_start_utc: string
+  context_end_utc: string
+  horizon: number
+  units: string
+  points: Array<{
+    ts_utc: string
+    median_mw: number
+    p10_mw: number
+    p90_mw: number
+    temp_c?: number | null
+  }>
+}
+
 function isRunPod(): boolean {
   return API.startsWith("https://api.runpod.ai")
 }
 
-async function fetchLocal(ba: BaCode, horizon: number): Promise<Response> {
-  // `ba` is already validated against the allow-list, so no escaping
-  // concerns. `horizon` is a bounded integer. Using encodeURIComponent
-  // anyway as a defence-in-depth belt-and-suspenders.
+// ─── Baked path (fast) ─────────────────────────────────────────────────
+
+async function fetchBaked(
+  ba: BaCode,
+  horizon: number,
+): Promise<ForecastResponse | null> {
+  if (!BLOB_BASE_URL) return null
+  // Trailing slash tolerance: let the env var be set either way.
+  const base = BLOB_BASE_URL.replace(/\/$/, "")
+  const url = `${base}/forecasts/${ba}.json`
+
+  const r = await fetch(url, {
+    // Let Next.js / the Vercel edge cache respect the Cache-Control on the
+    // blob itself. We don't force no-store here.
+    next: { revalidate: 60 },
+  })
+  if (!r.ok) return null
+
+  const payload = (await r.json()) as ForecastResponse
+
+  // Stale check: don't silently serve forecasts from last week if the bake
+  // cron has been broken.
+  const ageMs = Date.now() - Date.parse(payload.as_of_utc)
+  if (!Number.isFinite(ageMs) || ageMs > BAKED_MAX_AGE_MS) return null
+
+  // Baked payload is at horizon=168. Slice down to what the client asked
+  // for; never up (if someone asks for 169 we have to fall back to live).
+  if (payload.points.length < horizon) return null
+  const sliced = {
+    ...payload,
+    horizon,
+    points: payload.points.slice(0, horizon),
+  }
+  return sliced
+}
+
+// ─── Live inference path (fallback) ────────────────────────────────────
+
+async function fetchLiveModal(ba: BaCode, horizon: number): Promise<Response> {
   return fetch(
     `${API}/forecast/${encodeURIComponent(ba)}?horizon=${horizon}`,
     { cache: "no-store" },
   )
 }
 
-async function fetchRunPod(ba: BaCode, horizon: number): Promise<Response> {
+async function fetchLiveRunPod(ba: BaCode, horizon: number): Promise<Response> {
   if (!RUNPOD_KEY) {
     return Response.json(
       { error: "RUNPOD_API_KEY not set on server" },
@@ -91,16 +152,17 @@ async function fetchRunPod(ba: BaCode, horizon: number): Promise<Response> {
 }
 
 function errorResponse(body: object, status: number): Response {
-  // Errors are deliberately not cached — we don't want 422 / 502 pinned
-  // at the edge for 5 minutes.
   return Response.json(body, { status })
 }
+
+// ─── Handler ───────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest): Promise<Response> {
   const baRaw = req.nextUrl.searchParams.get("ba")
   const ba = baRaw ? baRaw.toUpperCase() : null
   const horizonRaw = req.nextUrl.searchParams.get("horizon") ?? "24"
   const horizon = Number.parseInt(horizonRaw, 10)
+  const force = req.nextUrl.searchParams.get("force") === "1"
 
   if (!ba || !BA_SET.has(ba)) {
     return errorResponse(
@@ -115,20 +177,40 @@ export async function GET(req: NextRequest): Promise<Response> {
     )
   }
 
+  // Fast path: baked JSON from Vercel Blob. Skipped when force=1 or
+  // BLOB_BASE_URL isn't configured.
+  if (!force) {
+    try {
+      const baked = await fetchBaked(ba as BaCode, horizon)
+      if (baked) {
+        return new Response(JSON.stringify(baked), {
+          status: 200,
+          headers: {
+            ...CACHE_HEADERS,
+            "content-type": "application/json",
+            "x-surge-backend": "blob",
+          },
+        })
+      }
+    } catch {
+      // Don't let a blob hiccup take the whole endpoint down; fall through
+      // to live inference.
+    }
+  }
+
+  // Slow path: call Modal or RunPod.
   const t0 = Date.now()
   let upstream: Response
   try {
     upstream = isRunPod()
-      ? await fetchRunPod(ba as BaCode, horizon)
-      : await fetchLocal(ba as BaCode, horizon)
+      ? await fetchLiveRunPod(ba as BaCode, horizon)
+      : await fetchLiveModal(ba as BaCode, horizon)
   } catch {
     return errorResponse({ error: "upstream unreachable" }, 502)
   }
   const elapsed = Date.now() - t0
 
   if (!upstream.ok) {
-    // Swallow upstream error bodies — they may contain stack traces. The
-    // client only learns the HTTP status.
     return errorResponse({ error: "upstream error" }, upstream.status)
   }
 
@@ -137,8 +219,6 @@ export async function GET(req: NextRequest): Promise<Response> {
     return errorResponse({ error: "upstream returned non-json" }, 502)
   }
 
-  // Validate the body is JSON before forwarding — if upstream got 200'd
-  // but returned garbage (misconfigured proxy, etc.), don't pass it on.
   const text = await upstream.text()
   try {
     JSON.parse(text)
@@ -152,7 +232,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       ...CACHE_HEADERS,
       "content-type": "application/json",
       "x-upstream-latency-ms": String(elapsed),
-      "x-upstream-backend": isRunPod() ? "runpod" : "modal",
+      "x-surge-backend": isRunPod() ? "runpod" : "modal",
     },
   })
 }

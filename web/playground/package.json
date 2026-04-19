@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^2.3.3",
     "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -37,9 +38,9 @@
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.1.7",
+    "postcss": "^8",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",
-    "postcss": "^8",
     "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3"
   }
