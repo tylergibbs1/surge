@@ -1,7 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import useSWR from "swr"
 
 import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
@@ -41,6 +41,12 @@ async function fetcher(url: string): Promise<ForecastResponse> {
   return r.json()
 }
 
+// We always request the maximum horizon (168 h) from the inference layer
+// so the slider just truncates a pre-computed series — no re-inference on
+// drag. Effective result: ONE model call per BA per hour-ish (thanks to
+// SWR dedup + the upstream 5-min Cache-Control).
+const MAX_HORIZON = 168
+
 export function Playground({
   ba,
   onBaChange,
@@ -52,17 +58,25 @@ export function Playground({
   horizon: number
   onHorizonChange: (h: number) => void
 }) {
-  // State is now lifted to the page so the map and the chart stay in sync.
 
-  const { data, error, isLoading, mutate } = useSWR<ForecastResponse>(
-    `/api/forecast?ba=${ba}&horizon=${horizon}`,
+  // Single fetch at max horizon; slider just slices. SWR's key stays
+  // stable regardless of slider value so rapid drags don't even stream.
+  const { data: full, error, isLoading, mutate } = useSWR<ForecastResponse>(
+    `/api/forecast?ba=${ba}&horizon=${MAX_HORIZON}`,
     fetcher,
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60_000,
+      dedupingInterval: 300_000,      // matches API Cache-Control
       keepPreviousData: true,
     },
   )
+
+  // Truncate locally to the user's selected horizon — zero network calls.
+  const data = useMemo<ForecastResponse | null>(() => {
+    if (!full) return null
+    if (horizon >= full.points.length) return full
+    return { ...full, horizon, points: full.points.slice(0, horizon) }
+  }, [full, horizon])
 
   const stats = useMemo(() => {
     if (!data) return null

@@ -189,14 +189,22 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
     [],
   )
 
+  // Always fetch the full 168 h series so the map shares cache keys with
+  // the chart — one inference per BA, regardless of where the slider is.
   for (const ba of BAS) {
     /* eslint-disable react-hooks/rules-of-hooks */
     const { data } = useSWR<ForecastResponse>(
-      `/api/forecast?ba=${ba}&horizon=${horizon}`,
+      `/api/forecast?ba=${ba}&horizon=168`,
       (url: string) => fetch(url).then((r) => r.ok ? r.json() : undefined),
-      { revalidateOnFocus: false, dedupingInterval: 60_000 },
+      { revalidateOnFocus: false, dedupingInterval: 300_000 },
     )
-    forecasts[ba] = data
+    // Slice locally to match the user's current horizon for shading/pulse.
+    forecasts[ba] = useMemo(() => {
+      if (!data) return undefined
+      return horizon >= data.points.length
+        ? data
+        : { ...data, horizon, points: data.points.slice(0, horizon) }
+    }, [data, horizon])
     /* eslint-enable react-hooks/rules-of-hooks */
   }
 
