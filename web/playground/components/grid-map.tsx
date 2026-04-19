@@ -21,10 +21,12 @@ import {
 } from "@/lib/us-grid-geo"
 import type { ForecastResponse } from "@/lib/types"
 
-// Vendored locally under /public — removes runtime dependency on a
+// Vendored under /public/geo — removes runtime dependency on a
 // third-party GitHub repo that could be deleted, rate-limited, or taken
-// over. Same Public Domain source (PublicaMundi/MappingAPI).
-const STATES_GEOJSON_URL = "/data/us-states.json"
+// over. (Path is `/geo/` not `/data/` because our top-level .gitignore
+// excludes any `data/` directory.) Same Public Domain source:
+// PublicaMundi/MappingAPI.
+const STATES_GEOJSON_URL = "/geo/us-states.json"
 
 // US-state full-name → 2-letter code, needed because the GeoJSON above
 // carries `properties.name` as the long form ("New York", not "NY").
