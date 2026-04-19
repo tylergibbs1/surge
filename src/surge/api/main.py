@@ -37,6 +37,8 @@ from surge import bas as _bas
 from surge.api import forecaster, live_load
 from surge.api.schemas import (
     SUPPORTED_BAS,
+    ActualPoint,
+    ActualsResponse,
     BAListResponse,
     BAMeta,
     CurrentLoadResponse,
@@ -176,6 +178,68 @@ async def current_load(
     except RuntimeError:
         raise HTTPException(status_code=503, detail="no load data available") from None
     return CurrentLoadResponse(**payload)
+
+
+@app.get("/actuals/{ba}", response_model=ActualsResponse, tags=["forecast"])
+@limiter.limit("60/minute")
+def actuals_one(
+    ba: str,
+    request: Request,  # slowapi pulls the rate-limit key from this
+    response: Response,
+    hours: int = 48,
+) -> ActualsResponse:
+    """Last `hours` of realized load_mw for one BA.
+
+    Powers the playground chart's historical context line so readers can
+    see the observed ramp running into the forecast — the forecast-start
+    break is meaningless without the actuals behind it.
+
+    Cheap: one polars scan, filtered + tailed. No model inference.
+    """
+    import polars as pl
+
+    from surge import store
+
+    ba = ba.upper()
+    if ba not in SUPPORTED_BAS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unsupported BA '{ba}'. Supported: {', '.join(SUPPORTED_BAS)}",
+        )
+    if hours < 1 or hours > 720:
+        raise HTTPException(status_code=422, detail="hours must be in 1..720")
+
+    try:
+        df = (
+            store.scan("load_hourly")
+            .filter(pl.col("ba") == ba)
+            .filter(pl.col("load_mw").is_not_null())
+            .filter(pl.col("load_mw") > 0)
+            .filter(pl.col("load_mw") < 200_000)
+            .sort("ts_utc")
+            .tail(hours)
+            .collect()
+        )
+    except Exception:
+        log.exception("actuals scan failed for %s", ba)
+        raise HTTPException(status_code=500, detail="actuals scan failed") from None
+
+    if df.is_empty():
+        raise HTTPException(status_code=503, detail=f"no load data for {ba}")
+
+    points = [
+        ActualPoint(ts_utc=row["ts_utc"], load_mw=float(row["load_mw"]))
+        for row in df.iter_rows(named=True)
+    ]
+    # 5-minute cache — same as /forecast. Hourly-granularity data doesn't
+    # change inside a cache window so the edge can absorb repeat hits.
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+    return ActualsResponse(
+        ba=ba,
+        as_of_utc=datetime.now(tz=UTC),
+        hours=len(points),
+        points=points,
+    )
 
 
 @app.get("/bas", response_model=BAListResponse, tags=["meta"])

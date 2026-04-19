@@ -15,7 +15,7 @@ export default function Page() {
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight">
+            <h1 className="text-4xl font-semibold leading-none tracking-tighter md:text-5xl">
               Surge playground
             </h1>
             <p className="text-muted-foreground max-w-3xl">

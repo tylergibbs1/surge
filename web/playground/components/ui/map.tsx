@@ -16,7 +16,14 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { X, Minus, Plus, Locate, Maximize, Loader2 } from "lucide-react";
+import {
+  Cross2Icon,
+  MinusIcon,
+  PlusIcon,
+  TargetIcon,
+  EnterFullScreenIcon,
+  UpdateIcon,
+} from "@radix-ui/react-icons";
 
 import { cn } from "@/lib/utils";
 
@@ -526,7 +533,7 @@ function PopupCloseButton({ onClick }: { onClick: () => void }) {
       aria-label="Close popup"
       className="focus-visible:ring-ring hover:bg-muted text-foreground absolute top-0.5 right-0.5 z-10 inline-flex size-5 cursor-pointer items-center justify-center rounded-sm transition-colors focus:outline-none focus-visible:ring-2"
     >
-      <X className="size-3.5" />
+      <Cross2Icon className="size-3.5" />
     </button>
   );
 }
@@ -593,7 +600,7 @@ function MarkerPopup({
   return createPortal(
     <div
       className={cn(
-        "bg-popover text-popover-foreground relative max-w-62 rounded-md border p-3 shadow-md",
+        "bg-popover text-popover-foreground relative max-w-62 rounded-md border p-3 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.28)] ring-1 ring-foreground/5",
         "animate-in fade-in-0 zoom-in-95 duration-200 ease-out",
         className,
       )}
@@ -670,7 +677,7 @@ function MarkerTooltip({
   return createPortal(
     <div
       className={cn(
-        "bg-foreground text-background pointer-events-none rounded-md px-2 py-1 text-xs text-balance shadow-md",
+        "bg-foreground text-background pointer-events-none rounded-md px-2 py-1 text-xs text-balance shadow-[0_8px_24px_-10px_rgb(0_0_0/0.35)]",
         "animate-in fade-in-0 zoom-in-95 duration-200 ease-out",
         className,
       )}
@@ -846,10 +853,10 @@ function MapControls({
       {showZoom && (
         <ControlGroup>
           <ControlButton onClick={handleZoomIn} label="Zoom in">
-            <Plus className="size-4" />
+            <PlusIcon className="size-4" />
           </ControlButton>
           <ControlButton onClick={handleZoomOut} label="Zoom out">
-            <Minus className="size-4" />
+            <MinusIcon className="size-4" />
           </ControlButton>
         </ControlGroup>
       )}
@@ -866,9 +873,9 @@ function MapControls({
             disabled={waitingForLocation}
           >
             {waitingForLocation ? (
-              <Loader2 className="size-4 animate-spin" />
+              <UpdateIcon className="size-4 animate-spin" />
             ) : (
-              <Locate className="size-4" />
+              <TargetIcon className="size-4" />
             )}
           </ControlButton>
         </ControlGroup>
@@ -876,7 +883,7 @@ function MapControls({
       {showFullscreen && (
         <ControlGroup>
           <ControlButton onClick={handleFullscreen} label="Toggle fullscreen">
-            <Maximize className="size-4" />
+            <EnterFullScreenIcon className="size-4" />
           </ControlButton>
         </ControlGroup>
       )}
@@ -1014,7 +1021,7 @@ function MapPopup({
   return createPortal(
     <div
       className={cn(
-        "bg-popover text-popover-foreground relative max-w-62 rounded-md border p-3 shadow-md",
+        "bg-popover text-popover-foreground relative max-w-62 rounded-md border p-3 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.28)] ring-1 ring-foreground/5",
         "animate-in fade-in-0 zoom-in-95 duration-200 ease-out",
         className,
       )}

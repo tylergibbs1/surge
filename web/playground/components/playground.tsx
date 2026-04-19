@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { useMemo } from "react"
 import useSWR from "swr"
 
+import { ErrorBanner } from "@/components/error-banner"
 import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
 import { RefreshIcon } from "@/components/refresh-icon"
 import { BA_LABEL, BA_UTC_OFFSET, type BaCode } from "@/lib/us-grid-geo"
@@ -120,13 +121,29 @@ export function Playground({
     return { peak, peakPt, mean, piPct, peakDeltaPct }
   }, [data])
 
+  // Plain-English takeaway for the card title. Prefers "peak at X
+  // tomorrow" when stats are available; falls back to the BA name while
+  // data is loading so the title isn't empty.
+  const title = stats
+    ? `${BA_LABEL[ba]}: peak ${(stats.peak / 1000).toFixed(1)} GW · ${fmtLocalPeakTime(stats.peakPt.ts_utc, ba)} local`
+    : `${BA_LABEL[ba]} load forecast`
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Forecast</CardTitle>
+        <CardTitle>{title}</CardTitle>
         <CardDescription>
-          Dashed line is our median forecast, shaded band is the 80% uncertainty
-          range. Hover the chart for per-hour values.
+          Hourly probabilistic load forecast · GW · EIA-930 demand series ·
+          model <span className="font-mono">{data?.model ?? "—"}</span>
+          {data ? (
+            <>
+              {" "}
+              · issued{" "}
+              <span className="font-mono tabular-nums">
+                {new Date(data.as_of_utc).toISOString().slice(0, 16)}Z
+              </span>
+            </>
+          ) : null}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -207,8 +224,8 @@ export function Playground({
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <p className="text-muted-foreground text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-muted-foreground min-w-0 flex-1 text-xs">
             {data ? (
               <>
                 Forecast starts{" "}
@@ -218,9 +235,7 @@ export function Playground({
                 · {horizon} hourly steps · model{" "}
                 <span className="font-mono">{data.model}</span>
               </>
-            ) : error ? (
-              <span className="text-destructive">error: {error.message}</span>
-            ) : (
+            ) : error ? null : (
               "Loading forecast…"
             )}
           </p>
@@ -235,6 +250,13 @@ export function Playground({
             Refresh
           </Button>
         </div>
+
+        {error && !data ? (
+          <ErrorBanner
+            title="Couldn't load forecast"
+            detail={error.message}
+          />
+        ) : null}
 
         {data ? <ForecastChart forecast={data} ba={ba} /> : <ForecastChartSkeleton />}
 
@@ -262,6 +284,36 @@ export function Playground({
               </div>
               <div className="text-xs">at step 1</div>
             </div>
+          </div>
+        ) : null}
+
+        {/* Provenance footer: source, assumptions, last-observed. Keeps the
+            chart self-explanatory without forcing the reader to dig through
+            the repo README. */}
+        {data ? (
+          <div className="text-muted-foreground border-t pt-3 text-[11px] leading-relaxed">
+            <p className="flex flex-wrap gap-x-3 gap-y-1">
+              <span>
+                Source:{" "}
+                <a
+                  href="https://www.eia.gov/electricity/gridmonitor/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-4 hover:underline"
+                >
+                  EIA-930 hourly demand
+                </a>
+              </span>
+              <span className="text-foreground/20" aria-hidden="true">·</span>
+              <span>
+                Context ends{" "}
+                <span className="font-mono tabular-nums">
+                  {new Date(data.context_end_utc).toISOString().slice(0, 16)}Z
+                </span>
+              </span>
+              <span className="text-foreground/20" aria-hidden="true">·</span>
+              <span>Raw load — not weather-normalized, net of BTM solar</span>
+            </p>
           </div>
         ) : null}
       </CardContent>

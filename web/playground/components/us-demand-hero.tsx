@@ -58,6 +58,22 @@ function formatValue(v: number): string {
   return `${v.toFixed(1)} GW`
 }
 
+// Matches Liveline's visual rhythm: the live chart fills ~2/3 of the 180 px
+// canvas with a shaded area, so the skeleton draws an empty area band of
+// the same shape to keep layout stable across the loading → ready swap.
+function HeroSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative h-full w-full animate-pulse overflow-hidden rounded-md bg-foreground/[0.04]"
+    >
+      <div className="absolute inset-x-4 top-3 h-2 w-16 rounded-sm bg-foreground/10" />
+      <div className="absolute inset-x-0 bottom-7 h-[55%] bg-gradient-to-t from-foreground/[0.06] to-transparent" />
+      <div className="absolute inset-x-4 bottom-2 h-px bg-foreground/10" />
+    </div>
+  )
+}
+
 export function UsDemandHero() {
   const [state, setState] = useState<State>({ kind: "loading" })
   const intervalRef = useRef<number | null>(null)
@@ -147,10 +163,13 @@ export function UsDemandHero() {
           margins (see `padding` prop) and the outer p-4 on <section>
           already gives breathing room from the card edge. */}
       <div className="h-[180px] w-full">
+        {state.kind === "loading" ? (
+          <HeroSkeleton />
+        ) : (
         <Liveline
           data={state.kind === "ready" ? state.snap.data : []}
           value={state.kind === "ready" ? state.snap.value : 0}
-          loading={state.kind === "loading"}
+          loading={false}
           emptyText={
             state.kind === "error" ? "live feed unavailable" : "no data yet"
           }
@@ -176,6 +195,7 @@ export function UsDemandHero() {
           // every discrete hourly update to the 60-fps render loop.
           lerpSpeed={0.08}
         />
+        )}
       </div>
 
       {/* Screen-reader announcement for every update. aria-live=polite so

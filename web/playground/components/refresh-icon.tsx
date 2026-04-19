@@ -3,7 +3,7 @@
 // one is absolutely positioned over the other. Scale+opacity+blur per the
 // contextual icon animation recipe.
 
-import { Loader2, RefreshCw } from "lucide-react"
+import { ReloadIcon, UpdateIcon } from "@radix-ui/react-icons"
 
 const CROSS = "opacity,scale,filter"
 const EASE = "cubic-bezier(0.2, 0, 0, 1)"
@@ -12,7 +12,7 @@ const DUR = "300ms"
 export function RefreshIcon({ loading }: { loading: boolean }) {
   return (
     <span className="relative inline-block size-4" aria-hidden="true">
-      <RefreshCw
+      <ReloadIcon
         className="absolute inset-0 size-4"
         style={{
           transitionProperty: CROSS,
@@ -23,7 +23,7 @@ export function RefreshIcon({ loading }: { loading: boolean }) {
           filter: loading ? "blur(4px)" : "blur(0px)",
         }}
       />
-      <Loader2
+      <UpdateIcon
         className="absolute inset-0 size-4 animate-spin"
         style={{
           transitionProperty: CROSS,

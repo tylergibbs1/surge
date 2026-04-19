@@ -148,7 +148,7 @@ export function BaGrid({
           <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Sort
           </p>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-1 md:flex-col">
             <SortOption value="peak-pct" active={sort === "peak-pct"} onSelect={setSort}>
               % of all-time peak
             </SortOption>
@@ -228,7 +228,7 @@ function FilterGroup<T extends string>({
       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap gap-1 md:flex-col">
         {options.map((opt) => {
           const active = value === opt
           return (
@@ -236,7 +236,7 @@ function FilterGroup<T extends string>({
               key={opt}
               type="button"
               onClick={() => onChange(opt)}
-              className={`flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 ${
+              className={`flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 ${
                 active
                   ? "bg-foreground/8 font-medium text-foreground"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"

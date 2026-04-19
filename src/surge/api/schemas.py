@@ -76,3 +76,16 @@ class CurrentLoadResponse(BaseModel):
     latest_total_mw: float
     hours: int
     points: list[CurrentLoadPoint]
+
+
+class ActualPoint(BaseModel):
+    ts_utc: datetime
+    load_mw: float
+
+
+class ActualsResponse(BaseModel):
+    ba: str
+    as_of_utc: datetime
+    hours: int
+    units: str = "MW"
+    points: list[ActualPoint]

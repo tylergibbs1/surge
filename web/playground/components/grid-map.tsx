@@ -1,8 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
 
+import { ErrorBanner } from "@/components/error-banner"
 import {
   Map,
   MapControls,
@@ -107,15 +108,25 @@ function GridPolygons({
   selected: BaCode
 }) {
   const { map, isLoaded } = useMap()
+  const [polyError, setPolyError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!map || !isLoaded) return
     let cancelled = false
 
     ;(async () => {
-      // Fetch + enrich once; paint updates are cheap setPaintProperty calls.
-      const res = await fetch(STATES_GEOJSON_URL, { cache: "force-cache" })
-      if (!res.ok || cancelled) return
+      let res: Response
+      try {
+        res = await fetch(STATES_GEOJSON_URL, { cache: "force-cache" })
+      } catch (e) {
+        if (!cancelled) setPolyError(String(e).slice(0, 120))
+        return
+      }
+      if (cancelled) return
+      if (!res.ok) {
+        setPolyError(`states geojson ${res.status}`)
+        return
+      }
       const data = (await res.json()) as GeoJSON.FeatureCollection
       for (const f of data.features) {
         const name = (f.properties as { name?: string })?.name ?? ""
@@ -208,7 +219,15 @@ function GridPolygons({
     ])
   }, [map, isLoaded, selected])
 
-  return null
+  if (!polyError) return null
+  return (
+    <div className="pointer-events-auto absolute left-2 top-2 z-20 max-w-xs">
+      <ErrorBanner
+        title="State shading unavailable"
+        detail={polyError}
+      />
+    </div>
+  )
 }
 
 function peakInfo(fc?: ForecastResponse) {
@@ -223,35 +242,40 @@ function peakInfo(fc?: ForecastResponse) {
   return { peakGW: maxP / 1000, peakTs: maxTs }
 }
 
+type AllPayload = {
+  baked_at: string
+  horizon: number
+  forecasts: ForecastResponse[]
+}
+
+const _BA_SET = new Set<string>(BAS as readonly string[])
+
 export function GridMap({ horizon = 24, selected, onSelect }: Props) {
-  // Fetch all 7 forecasts in parallel via SWR (one key per BA so cache keys
-  // are stable and swr-dedup works).
-  const forecasts: Record<BaCode, ForecastResponse | undefined> = useMemo(
-    () => Object.fromEntries(BAS.map((b) => [b, undefined])) as Record<
-      BaCode,
-      ForecastResponse | undefined
-    >,
-    [],
+  // One bake call for all BAs instead of 53 per-BA requests. Same source
+  // /grid already reads from, so the map and grid views stay consistent.
+  // The per-BA chart still hits /api/forecast directly for fresh inference
+  // on selection — independent from this shading layer.
+  const { data: all } = useSWR<AllPayload>(
+    "/api/forecast-all",
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : undefined)),
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
   )
 
-  // Always fetch the full 168 h series so the map shares cache keys with
-  // the chart — one inference per BA, regardless of where the slider is.
-  for (const ba of BAS) {
-    /* eslint-disable react-hooks/rules-of-hooks */
-    const { data } = useSWR<ForecastResponse>(
-      `/api/forecast?ba=${ba}&horizon=168`,
-      (url: string) => fetch(url).then((r) => r.ok ? r.json() : undefined),
-      { revalidateOnFocus: false, dedupingInterval: 300_000 },
-    )
-    // Slice locally to match the user's current horizon for shading/pulse.
-    forecasts[ba] = useMemo(() => {
-      if (!data) return undefined
-      return horizon >= data.points.length
-        ? data
-        : { ...data, horizon, points: data.points.slice(0, horizon) }
-    }, [data, horizon])
-    /* eslint-enable react-hooks/rules-of-hooks */
-  }
+  const forecasts = useMemo<Record<BaCode, ForecastResponse | undefined>>(() => {
+    const out = Object.fromEntries(
+      BAS.map((b) => [b, undefined]),
+    ) as Record<BaCode, ForecastResponse | undefined>
+    if (!all) return out
+    for (const f of all.forecasts) {
+      if (!_BA_SET.has(f.ba)) continue
+      const ba = f.ba as BaCode
+      out[ba] =
+        horizon >= f.points.length
+          ? f
+          : { ...f, horizon, points: f.points.slice(0, horizon) }
+    }
+    return out
+  }, [all, horizon])
 
   return (
     <div className="border-border relative h-[420px] w-full overflow-hidden rounded-lg border">
@@ -292,11 +316,12 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
                     />
                   ) : null}
                   <span
-                    className="relative block rounded-full border-2 border-white/90 shadow-lg"
+                    className="relative block rounded-full border-2 border-white/90"
                     style={{
                       width: sizePx,
                       height: sizePx,
                       background: BA_FILL_COLOR[ba],
+                      boxShadow: `0 2px 8px -2px ${BA_FILL_COLOR[ba]}66`,
                     }}
                   />
                   <span className="pointer-events-none absolute top-full mt-1 font-mono text-[10px] font-semibold tracking-wide whitespace-nowrap text-white mix-blend-difference">
@@ -306,7 +331,7 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
               </MarkerContent>
 
               <MarkerPopup>
-                <div className="bg-popover text-popover-foreground min-w-[180px] rounded-md border p-3 shadow-md">
+                <div className="bg-popover text-popover-foreground min-w-[180px] rounded-md border p-3 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.28)] ring-1 ring-foreground/5">
                   <div className="mb-1 flex items-center gap-2">
                     <span
                       className="size-2.5 rounded-full"
