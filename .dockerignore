@@ -1,0 +1,27 @@
+# Explicit list so buildkit doesn't fall back to .gitignore (which excludes
+# data_snapshot and prevents the handler from seeing any parquet data).
+.git
+.github
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.DS_Store
+._*
+node_modules
+
+# Huge artifacts irrelevant to the runtime container
+models/
+web/
+docs/plots/
+.next/
+experiments/results.tsv
+*.safetensors
+*.bin
+*.pt
+*.ckpt

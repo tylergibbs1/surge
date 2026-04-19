@@ -5,7 +5,12 @@
 
 import { NextRequest } from "next/server"
 
-const API = process.env.SURGE_API_URL ?? "http://127.0.0.1:8000"
+// Default to the Modal-hosted FastAPI so users cloning the repo get a
+// working demo without running anything locally. Override with
+// SURGE_API_URL=http://127.0.0.1:8000 for local dev.
+const API =
+  process.env.SURGE_API_URL ??
+  "https://tylergibbs1--surge-api-fastapi-app.modal.run"
 const RUNPOD_KEY = process.env.RUNPOD_API_KEY
 
 function isRunPod(): boolean {
