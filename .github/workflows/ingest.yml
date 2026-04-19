@@ -38,9 +38,11 @@ jobs:
       - name: Refresh load (EIA-930, required)
         run: python -m surge.ingest --days 7 --skip-weather
 
-      - name: Refresh weather (ASOS, best-effort — Mesonet rate-limits GH IPs)
-        continue-on-error: true
-        run: python -m surge.ingest --days 7 --skip-load
+      # Weather is deliberately NOT fetched from GitHub Actions — Iowa
+      # Mesonet rate-limits the shared GH runner IP pool hard enough that
+      # a 53-BA refresh reliably blows the job timeout. Weather ingests
+      # happen from the RunPod / Modal side instead (their IPs aren't
+      # rate-limited), and this workflow just keeps load current.
 
       - name: Upload refreshed parquet
         uses: actions/upload-artifact@v4
