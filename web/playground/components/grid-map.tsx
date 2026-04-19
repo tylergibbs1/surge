@@ -60,8 +60,13 @@ const _ISO_COLOR: Partial<Record<BaCode, string>> = {
   ISNE: "#F07FB0",  // pink
   SWPP: "#6BC4E0",  // sky
 }
-const _EASTERN_NONISO = "#7A8B6E"  // muted olive
-const _WESTERN_NONISO = "#6E8A8B"  // muted sage
+// Non-RTO tints brightened from the original muted olive/sage — the old
+// #7A8B6E / #6E8A8B read as near-black against the dark basemap at the
+// 0.3–0.5 opacity the choropleth settles on, so most of the Western and
+// Southeast US looked like empty space. These are ~40% lighter while
+// still staying deliberately quieter than the 7 ISO accent hues.
+const _EASTERN_NONISO = "#A3B894"  // lighter olive-green
+const _WESTERN_NONISO = "#95B6B8"  // lighter sage-teal
 const _INTERCONNECT: Record<BaCode, "Eastern" | "Western" | "Texas"> = {
   PJM: "Eastern", CISO: "Western", ERCO: "Texas", MISO: "Eastern",
   NYIS: "Eastern", ISNE: "Eastern", SWPP: "Eastern",
@@ -142,7 +147,9 @@ function GridPolygons({
             "fill-opacity": [
               "case",
               ["has", "ba"],
-              ["coalesce", ["feature-state", "pct_peak"], 0.25],
+              // 0.40 baseline for any mapped BA that doesn't have a
+              // forecast yet — was 0.25, invisible against the dark map.
+              ["coalesce", ["feature-state", "pct_peak"], 0.40],
               0.08,
             ],
           },
@@ -179,9 +186,13 @@ function GridPolygons({
         (m, p) => Math.max(m, p.median_mw), 0)
       const pct = Math.min(1, peak / BA_PEAK_MW[ba])
       // feature-state requires feature.id; this GeoJSON has numeric IDs.
+      // Narrower dynamic range (0.40..0.80) than before (0.18..0.73) —
+      // the old floor made overnight/low-demand BAs look un-filled,
+      // which read as "this state isn't part of surge" rather than
+      // "this BA is at 40% of its peak."
       map.setFeatureState(
         { source: "us-states", id: f.id as number },
-        { pct_peak: 0.18 + pct * 0.55 },
+        { pct_peak: 0.40 + pct * 0.40 },
       )
     }
   }, [map, isLoaded, forecasts])
