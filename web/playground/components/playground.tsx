@@ -6,6 +6,7 @@ import useSWR from "swr"
 
 import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
 import { RefreshIcon } from "@/components/refresh-icon"
+import type { BaCode } from "@/lib/us-grid-geo"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -40,9 +41,18 @@ async function fetcher(url: string): Promise<ForecastResponse> {
   return r.json()
 }
 
-export function Playground() {
-  const [ba, setBa] = useState<string>("PJM")
-  const [horizon, setHorizon] = useState<number>(24)
+export function Playground({
+  ba,
+  onBaChange,
+  horizon,
+  onHorizonChange,
+}: {
+  ba: BaCode
+  onBaChange: (ba: BaCode) => void
+  horizon: number
+  onHorizonChange: (h: number) => void
+}) {
+  // State is now lifted to the page so the map and the chart stay in sync.
 
   const { data, error, isLoading, mutate } = useSWR<ForecastResponse>(
     `/api/forecast?ba=${ba}&horizon=${horizon}`,
@@ -80,7 +90,7 @@ export function Playground() {
             <label className="text-muted-foreground text-xs font-medium uppercase">
               Balancing authority
             </label>
-            <Select value={ba} onValueChange={setBa}>
+            <Select value={ba} onValueChange={(v) => onBaChange(v as BaCode)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -106,7 +116,7 @@ export function Playground() {
               max={168}
               step={1}
               value={[horizon]}
-              onValueChange={(v) => setHorizon(v[0])}
+              onValueChange={(v) => onHorizonChange(v[0])}
             />
           </div>
         </div>

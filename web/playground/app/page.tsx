@@ -1,7 +1,8 @@
-// Server component. Static content (header, footer, copy) renders on the
-// server; only the interactive Playground ships to the client.
+// Playground page. A small client wrapper (<PlaygroundApp>) lifts
+// (ba, horizon) so the US grid map and the chart stay synced — map click
+// updates the chart; dropdown update highlights the map.
 
-import { Playground } from "@/components/playground"
+import { PlaygroundApp } from "@/components/playground-app"
 
 export default function Page() {
   return (
@@ -13,13 +14,14 @@ export default function Page() {
           </h1>
           <p className="text-muted-foreground max-w-3xl">
             Open probabilistic day-ahead load forecasts for 7 US balancing
-            authorities. Pick a grid, pick a horizon, see the forecast. Model:
-            Chronos-2 fine-tuned on 7 years of public data. Test MASE 0.45,
-            ~2% MAPE — matching what utilities pay tens of thousands per year for.
+            authorities. Click a region on the map or pick from the dropdown.
+            Model: Chronos-2 fine-tuned on 7 years of public data. Test MASE
+            0.45, ~2% MAPE — matching what utilities pay tens of thousands
+            per year for.
           </p>
         </header>
 
-        <Playground />
+        <PlaygroundApp />
 
         <footer className="text-muted-foreground text-xs">
           <p>
