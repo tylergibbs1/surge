@@ -145,7 +145,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         entries: manifest,
       }),
       {
-        access: "public",
+        access: "private",
         token: BLOB_TOKEN,
         contentType: "application/json",
         addRandomSuffix: false,
