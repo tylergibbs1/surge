@@ -104,6 +104,34 @@ def test_ceiling_clamp_excludes_corrupt_row(tmp_path, monkeypatch) -> None:
     assert total_for(out_with_corrupt, bad_hour) == expected_total
 
 
+def test_overlapping_ingest_does_not_double_aggregate(tmp_path, monkeypatch) -> None:
+    """Regression for the (ts_utc, ba) dedupe bug.
+
+    `store.append` writes a new parquet per call — so running `--days 7`
+    and then `--days 120` literally writes the same row twice. Before the
+    store-layer dedupe, the aggregate summed both copies and the "live US
+    demand" hero jumped to ~2× reality whenever backfill windows overlapped.
+    """
+    monkeypatch.setenv("SURGE_DATA_DIR", str(tmp_path))
+    _clear_cache()
+    # First ingest: 50 BAs × 3 hours at 1 GW each.
+    _write_full_coverage(tmp_path, n_hours=3, per_ba_mw=1000.0)
+    single = asyncio.run(live_load.aggregate_load(hours=24))
+    single_total = single["points"][-1]["total_mw"]
+
+    _clear_cache()
+    # Second ingest: identical rows. Parquet on disk now has exact
+    # duplicates of every (ts_utc, ba) pair.
+    _write_full_coverage(tmp_path, n_hours=3, per_ba_mw=1000.0)
+    doubled = asyncio.run(live_load.aggregate_load(hours=24))
+    doubled_total = doubled["points"][-1]["total_mw"]
+
+    # Store-layer dedupe collapses the duplicates on read: the sum must
+    # match, not double.
+    assert doubled_total == single_total
+    assert doubled_total == 50 * 1000.0
+
+
 def test_ttl_cache_reuses_payload(tmp_path, monkeypatch) -> None:
     """Two calls with the same args in the same hour must return the
     literally-same object (cache hit), not rescan the store."""

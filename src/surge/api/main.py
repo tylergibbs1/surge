@@ -210,20 +210,16 @@ def actuals_one(
         raise HTTPException(status_code=422, detail="hours must be in 1..720")
 
     try:
+        # Dedupe at the store layer — `append` is not idempotent and
+        # duplicate rows crash Recharts with "two children with the same
+        # key" on the frontend. Filtered to one BA, so ts_utc alone is
+        # the business key here.
         df = (
-            store.scan("load_hourly")
+            store.scan("load_hourly", dedupe_on=["ts_utc", "ba"])
             .filter(pl.col("ba") == ba)
             .filter(pl.col("load_mw").is_not_null())
             .filter(pl.col("load_mw") > 0)
             .filter(pl.col("load_mw") < 200_000)
-            # Dedupe on ts_utc: `store.append` isn't idempotent, so
-            # overlapping ingest windows write the same row twice.
-            # Duplicate rows crash the frontend chart with "two children
-            # with the same key" when Recharts generates axis ticks.
-            # Prefer the most recently-written copy so in-place EIA
-            # revisions land. Mirror of live_load.py's dedupe.
-            .sort(["ts_utc", "as_of"], descending=[False, True])
-            .unique(subset=["ts_utc"], keep="first")
             .sort("ts_utc")
             .tail(hours)
             .collect()

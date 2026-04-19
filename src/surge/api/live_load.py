@@ -61,7 +61,10 @@ def _scan(hours: int) -> dict[str, Any]:
         years_months.add((cursor.year, cursor.month))
         cursor += timedelta(days=1)
 
-    scan = store.scan("load_hourly")
+    # Dedupe at the store layer: overlapping ingest windows (e.g.
+    # `--days 7` then `--days 120`) write the same (ts_utc, ba) row
+    # twice, which used to silently double the aggregate sum.
+    scan = store.scan("load_hourly", dedupe_on=["ts_utc", "ba"])
     partition_filter = pl.lit(False)
     for y, m in years_months:
         partition_filter = partition_filter | (
@@ -75,13 +78,6 @@ def _scan(hours: int) -> dict[str, Any]:
             .filter(pl.col("load_mw").is_not_null())
             .filter(pl.col("load_mw") > 0)
             .filter(pl.col("load_mw") < _SANE_BA_MW_CEILING)
-            # Dedupe on (ts_utc, ba): `store.append` isn't idempotent —
-            # overlapping ingest windows (e.g. running `--days 7` then
-            # `--days 120`) write the same row twice and the aggregate
-            # doubles. Prefer the most-recently-written copy so in-place
-            # EIA revisions are honoured.
-            .sort(["ts_utc", "ba", "as_of"], descending=[False, False, True])
-            .unique(subset=["ts_utc", "ba"], keep="first")
             .group_by("ts_utc")
             .agg(
                 pl.col("load_mw").sum().alias("total_mw"),

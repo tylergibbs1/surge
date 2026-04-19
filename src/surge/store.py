@@ -90,12 +90,47 @@ def append(
     return dataset_path(name)
 
 
-def scan(name: str) -> pl.LazyFrame:
-    """Lazy scan of an entire dataset. Returns a LazyFrame for .filter / .select."""
+def scan(
+    name: str,
+    *,
+    dedupe_on: list[str] | None = None,
+    recency_col: str = "as_of",
+) -> pl.LazyFrame:
+    """Lazy scan of an entire dataset. Returns a LazyFrame for .filter / .select.
+
+    When `dedupe_on` is set, the scan deduplicates on those columns
+    keeping the row with the greatest `recency_col` (latest write wins).
+    Use this whenever `append()` may have written the same business key
+    twice — e.g. overlapping backfill windows, EIA in-place revisions.
+    Without it, aggregates silently double.
+
+    Examples:
+        # Raw append-only stream
+        store.scan("load_hourly")
+
+        # One canonical row per (ts_utc, ba), latest write wins
+        store.scan("load_hourly", dedupe_on=["ts_utc", "ba"])
+    """
     root = dataset_path(name)
     if not root.exists():
         return pl.LazyFrame()
-    return pl.scan_parquet(str(root / "**/*.parquet"), hive_partitioning=True)
+    lf = pl.scan_parquet(str(root / "**/*.parquet"), hive_partitioning=True)
+    if dedupe_on is None:
+        return lf
+    # Sort on `recency_col` too when it exists so the latest write wins
+    # ties (EIA in-place revisions). Datasets without it (test fixtures,
+    # older snapshots) still dedupe deterministically on the key alone.
+    has_recency = recency_col in lf.collect_schema().names()
+    if has_recency:
+        sort_cols = [*dedupe_on, recency_col]
+        descending = [False] * len(dedupe_on) + [True]
+    else:
+        sort_cols = list(dedupe_on)
+        descending = [False] * len(dedupe_on)
+    return (
+        lf.sort(sort_cols, descending=descending)
+          .unique(subset=dedupe_on, keep="first")
+    )
 
 
 # --- Manifest (dedup / backfill tracking) ---------------------------------

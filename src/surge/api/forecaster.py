@@ -76,7 +76,9 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
 
 
 def _load_ba(ba: str) -> dict[str, Any]:
-    load = (store.scan("load_hourly")
+    # Dedupe at the store layer so overlapping ingest windows or in-place
+    # EIA revisions don't feed double-counted rows into the model context.
+    load = (store.scan("load_hourly", dedupe_on=["ts_utc", "ba"])
               .filter(pl.col("ba") == ba)
               .select("ts_utc", "load_mw")
               .sort("ts_utc")
@@ -84,7 +86,7 @@ def _load_ba(ba: str) -> dict[str, Any]:
     load = load.with_columns(
         pl.when(pl.col("load_mw") > 200_000).then(None).otherwise(pl.col("load_mw")).alias("load_mw")
     )
-    weather = (store.scan("weather_hourly")
+    weather = (store.scan("weather_hourly", dedupe_on=["ts_utc", "ba"])
                  .filter(pl.col("ba") == ba)
                  .select("ts_utc", "temp_c")
                  .sort("ts_utc")

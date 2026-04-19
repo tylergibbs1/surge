@@ -20,7 +20,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import type { ForecastResponse } from "@/lib/types"
-import { BA_UTC_OFFSET, type BaCode } from "@/lib/us-grid-geo"
+import { BA_LABEL, BA_UTC_OFFSET, type BaCode } from "@/lib/us-grid-geo"
 
 const chartConfig = {
   load:     { label: "Actual load",       color: "var(--chart-1)" },
@@ -187,8 +187,15 @@ function CustomTooltip({
 }) {
   if (!active || !payload?.length) return null
   const r = payload[0].payload
-  const isActual = r.load !== undefined && r.median === undefined
+  // A row with `load` is an observation, regardless of whether buildRows
+  // also stamped median/lo/hi on it as the seam/bridge row — the seam is
+  // *still* the last realized reading, not a forecast. The 80% band
+  // renders only when this row is a pure forecast row (no observation).
+  const isActual = r.load !== undefined
+  const isSeam = isActual && r.median !== undefined
   const value = isActual ? r.load : r.median
+  const hasBand =
+    !isActual && !isSeam && r.lo !== undefined && r.hi !== undefined
   return (
     <div className="bg-popover text-popover-foreground rounded-md border p-3 font-mono text-xs shadow-[0_12px_32px_-12px_rgb(0_0_0/0.28)] ring-1 ring-foreground/5 backdrop-blur">
       <div className="flex items-baseline gap-2">
@@ -199,7 +206,7 @@ function CustomTooltip({
           {isActual ? "actual" : "forecast"}
         </span>
       </div>
-      {!isActual && r.lo !== undefined && r.hi !== undefined ? (
+      {hasBand && r.lo !== undefined && r.hi !== undefined ? (
         <div className="text-muted-foreground mt-0.5 tabular-nums">
           80% range: {r.lo.toFixed(1)}–{r.hi.toFixed(1)} GW
         </div>
@@ -236,9 +243,11 @@ export function ForecastChart({
   ba: BaCode
 }) {
   // Historical actuals run into the forecast start. On fetch error the
-  // chart just renders forecast-only — better than blocking the whole
-  // component on an extra network hop.
-  const { data: actuals } = useSWR<ActualsResponse>(
+  // chart still renders forecast-only — a failed context line is better
+  // than blocking the whole component on an extra network hop. The
+  // `actualsError` flag surfaces the miss as a subtle chip so readers
+  // understand why there's no solid line running into the forecast.
+  const { data: actuals, error: actualsError } = useSWR<ActualsResponse>(
     `/api/actuals?ba=${ba}&hours=${ACTUALS_HOURS}`,
     actualsFetcher,
     {
@@ -283,13 +292,43 @@ export function ForecastChart({
   // window — otherwise it'd be stuck against the axis edge.
   const nowInRange = nowMs >= xDomain[0] && nowMs <= xDomain[1]
 
+  // Screen-reader summary — the SVG chart conveys nothing to AT without
+  // a text alternative. Kept terse: BA, horizon, peak value + time, PI
+  // width at step 1, and history window if present.
+  const firstForecast = rows.find((r) => r.median !== undefined)
+  const actualsHours = lastActualMs !== null
+    ? Math.round(
+        (lastActualMs - (rows[0].ts_ms ?? lastActualMs)) / 3_600_000,
+      ) + 1
+    : 0
+  const ariaSummary = peakRow?.median !== undefined
+    ? `${BA_LABEL[ba]} probabilistic load forecast. ` +
+      `Forecast window: ${forecast.horizon} hours. ` +
+      `Peak ${peakRow.median.toFixed(1)} gigawatts at ${fmtTooltipTs(peakRow.ts_ms)} UTC. ` +
+      (firstForecast?.lo !== undefined && firstForecast.hi !== undefined
+        ? `Eighty percent range at step one: ${firstForecast.lo.toFixed(1)} to ${firstForecast.hi.toFixed(1)} gigawatts. `
+        : "") +
+      (actualsHours > 0 ? `${actualsHours} hours of historical context shown.` : "No historical context shown.")
+    : `${BA_LABEL[ba]} forecast chart.`
+
   return (
-    <div className="space-y-2">
+    <figure className="space-y-2" role="group" aria-label={ariaSummary}>
+      <p className="sr-only">{ariaSummary}</p>
+      {actualsError && !actuals ? (
+        <p
+          role="status"
+          className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 text-[10px] uppercase tracking-wider"
+        >
+          <span className="bg-amber-500 inline-block size-1.5 rounded-full" aria-hidden="true" />
+          Historical context unavailable — forecast-only view
+        </p>
+      ) : null}
       <ChartContainer config={chartConfig} className="h-[360px] w-full">
         <ComposedChart
           data={rows}
           syncId="surge-forecast"
           margin={{ top: 20, right: 16, left: 4, bottom: 4 }}
+          accessibilityLayer
         >
           <defs>
             <linearGradient id="forecastFill" x1="0" y1="0" x2="0" y2="1">
@@ -509,6 +548,6 @@ export function ForecastChart({
           </ComposedChart>
         </ChartContainer>
       ) : null}
-    </div>
+    </figure>
   )
 }
