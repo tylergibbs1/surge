@@ -79,9 +79,9 @@ export function UsDemandHero() {
   return (
     <section
       aria-label="US grid demand — live"
-      className="relative overflow-hidden rounded-xl bg-card/60 ring-1 ring-foreground/10"
+      className="relative overflow-hidden rounded-xl bg-card/60 p-4 ring-1 ring-foreground/10"
     >
-      <div className="flex items-center justify-between px-4 pt-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="mb-3 flex items-center justify-between text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <span
             className="inline-block size-1.5 rounded-full bg-emerald-500"
@@ -97,8 +97,11 @@ export function UsDemandHero() {
 
       {/* Liveline fills its parent height, so the explicit height on the
           wrapper is what controls the canvas size. Kept compact so the
-          hero doesn't push the map below the fold on a 13-inch laptop. */}
-      <div className="h-[180px] w-full px-1 pb-1">
+          hero doesn't push the map below the fold on a 13-inch laptop.
+          No horizontal padding here — Liveline draws its own internal
+          margins (see `padding` prop) and the outer p-4 on <section>
+          already gives breathing room from the card edge. */}
+      <div className="h-[180px] w-full">
         <Liveline
           data={state.kind === "ready" ? state.data : []}
           value={state.kind === "ready" ? state.value : 0}
