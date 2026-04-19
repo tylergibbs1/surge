@@ -101,15 +101,18 @@ async function fetchBaked(ba: BaCode, horizon: number): Promise<BakedResult> {
   let blobUrl: string
   try {
     const meta = await head(`forecasts/${ba}.json`, { token: BLOB_TOKEN })
-    // Private stores: `url` points at the raw object (403s without auth),
-    // `downloadUrl` embeds a short-lived signed token so server-side fetch
-    // works with no extra headers.
-    blobUrl = meta.downloadUrl
+    blobUrl = meta.url
   } catch (e) {
     return { ok: false, reason: `head-err:${String(e).slice(0, 40)}` }
   }
 
-  const r = await fetch(blobUrl, { next: { revalidate: 60 } })
+  // Private-store fetches require the read-write token in the
+  // Authorization header. @vercel/blob's head() doesn't pre-sign the URL
+  // like S3 does — the token gates every read.
+  const r = await fetch(blobUrl, {
+    headers: { authorization: `Bearer ${BLOB_TOKEN}` },
+    next: { revalidate: 60 },
+  })
   if (!r.ok) return { ok: false, reason: `fetch-${r.status}` }
 
   const payload = (await r.json()) as ForecastResponse
