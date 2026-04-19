@@ -149,8 +149,8 @@ def health(request: Request) -> HealthResponse:
 
 @app.get("/current-load", response_model=CurrentLoadResponse, tags=["meta"])
 @limiter.limit("60/minute")
-def current_load(
-    request: Request,
+async def current_load(
+    request: Request,  # slowapi pulls the rate-limit key from this
     hours: int = 24,
 ) -> CurrentLoadResponse:
     """Rolling aggregate US demand for the last `hours` hours.
@@ -158,11 +158,16 @@ def current_load(
     Sums `load_hourly` across every BA that's reported for each hour.
     Not a forecast — this is the actuals series the playground's live
     hero widget polls to feel tied to the real grid.
+
+    Async so the parquet scan runs under asyncio.to_thread and doesn't
+    block the event loop; backed by a per-hour TTL cache so repeated
+    hits inside the same clock hour (Vercel edge-cache misses, direct
+    callers) don't rescan the store each time.
     """
     if hours < 1 or hours > 168:
         raise HTTPException(status_code=422, detail="hours must be in 1..168")
     try:
-        payload = live_load.aggregate_load(hours=hours)
+        payload = await live_load.aggregate_load(hours=hours)
     except RuntimeError:
         raise HTTPException(status_code=503, detail="no load data available") from None
     return CurrentLoadResponse(**payload)

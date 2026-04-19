@@ -106,7 +106,11 @@ export function BaCard({
   return (
     <Link
       href={`/?ba=${ba}&horizon=24`}
-      className="surge-stagger-in group relative flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 transition-[box-shadow,outline,ring-color,background-color] duration-150 hover:ring-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
+      // Tailwind's `ring-*` utilities are implemented via `box-shadow`
+      // under the hood (and the ring colour travels through a CSS custom
+      // property). `ring-color` is not an animatable property, so listing
+      // it here did nothing — the correct name is `box-shadow`.
+      className="surge-stagger-in group relative flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 transition-[box-shadow,background-color] duration-150 hover:ring-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
       // Per-card stagger: 25 ms per index, capped at 20 cards so the last
       // one starts no later than 500 ms after the first. Feels coordinated
       // without anyone having to wait too long to see a card.

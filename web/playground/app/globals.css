@@ -149,12 +149,17 @@
 
 /* Respect the OS-level reduced-motion preference. The selected BA marker
    uses `animate-ping` (an infinite scale pulse) which is visually loud —
-   kill the animation entirely for users who've opted out. */
+   kill the animation entirely for users who've opted out.
+   animation-delay is clamped too: the /grid card stagger sets per-card
+   delays up to 500 ms inline, and with `animation-fill-mode: both` that
+   would strand a card at opacity 0 for the whole delay. Zeroing the
+   delay means every card snaps into its `to` state immediately. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
@@ -176,8 +181,13 @@
   }
 }
 .surge-stagger-in {
+  /* fill-mode: both — sit at the `from` state during the per-card delay
+     (inline on each card) and land on the `to` state afterwards. */
   animation: surge-stagger-in 360ms cubic-bezier(0.2, 0, 0, 1) both;
-  will-change: transform, opacity;
+  /* No `will-change` — the animation is a one-shot opacity + 6 px
+     translate. Leaving `will-change: transform, opacity` on 53 cards
+     permanently holds GPU compositor layers for every one, which is
+     worse than the micro-stutter avoiding hinting on a 360 ms animation. */
 }
 
 /* Pulse used by the "now" dot on the forecast chart. Unlike
