@@ -132,6 +132,36 @@ are ground-truth ASOS temperature where available (7 RTO BAs ingested from
 day one; the 46 non-RTO BAs use a zero-filled fallback pending a backfill
 from the new weather-station mapping in `surge.bas`).
 
+### vs. the grid operators' own forecasts
+
+**Surge beats EIA's day-ahead demand forecast on 6 of 7 major RTOs.**
+
+Every RTO/ISO submits a day-ahead load forecast to EIA each morning — that's
+the *production* forecast used to schedule generation. We pull the operator
+submissions (`type=DF` on EIA's Grid Monitor endpoint) and score them against
+actuals for the exact same 2025 window, same 24h horizon, same per-BA MASE
+denominator surge uses — 8,760 hours per BA, ~61,000 hours total.
+
+| Region | Surge MAE | Operator MAE | Ratio | Surge MASE | Operator MASE |
+|---|---:|---:|---:|---:|---:|
+| PJM | 1,937 MW | 3,297 MW | 1.70× | 0.40 | 0.68 |
+| CAISO | 652 MW | 2,098 MW | **3.22×** | 0.51 | 1.66 |
+| ERCOT | 1,215 MW | 1,366 MW | 1.12× | 0.50 | 0.56 |
+| MISO | 1,450 MW | 1,786 MW | 1.23× | 0.45 | 0.55 |
+| NYISO | 501 MW | 560 MW | 1.12× | 0.53 | 0.60 |
+| **ISO-NE** | **577 MW** | **306 MW** | **0.53×** | **0.63** | **0.34** |
+| SPP | 896 MW | 2,590 MW | **2.89×** | 0.61 | 1.77 |
+| **macro (7 RTOs)** | **1,032 MW** | **1,715 MW** | **1.66×** | **0.52** | **0.88** |
+
+Surge's macro MAE is ~40% lower than the operators' own submissions; macro
+MASE is ~41% lower. **ISO-NE is the sole loss** — their forecasting team is
+elite (MASE 0.34 is genuinely excellent for a 24-hour-ahead forecast). Two
+operator submissions, **CAISO (MASE 1.66) and SPP (MASE 1.77)**, did worse
+than a "same as yesterday" baseline on the 2025 window — a polite way of
+saying their day-ahead pipelines need work.
+
+Reproduce: `python scripts/compare_eia_df.py --start 2025-01-01 --end 2026-01-01`.
+
 ## How far ahead can it forecast?
 
 ![Horizon degradation curve](docs/plots/horizon_curve.png)
