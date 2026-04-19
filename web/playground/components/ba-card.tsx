@@ -25,6 +25,9 @@ type Props = {
   interconnect: "Eastern" | "Western" | "Texas"
   isRto: boolean
   accentHex: string
+  // Zero-based position in the filtered grid; used for the stagger
+  // delay on first render. Capped so late cards don't wait >800 ms.
+  index?: number
 }
 
 const INTERCONNECT_PILL: Record<Props["interconnect"], string> = {
@@ -76,7 +79,14 @@ function Sparkline({
   )
 }
 
-export function BaCard({ ba, points, interconnect, isRto, accentHex }: Props) {
+export function BaCard({
+  ba,
+  points,
+  interconnect,
+  isRto,
+  accentHex,
+  index = 0,
+}: Props) {
   const next24 = points.slice(0, 24)
   const peak24 = next24.reduce((m, p) => Math.max(m, p.median_mw), 0)
   const allTimePeak = BA_PEAK_MW[ba]
@@ -96,7 +106,11 @@ export function BaCard({ ba, points, interconnect, isRto, accentHex }: Props) {
   return (
     <Link
       href={`/?ba=${ba}&horizon=24`}
-      className="group relative flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 transition-[box-shadow,outline,ring-color,background-color] duration-150 hover:ring-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
+      className="surge-stagger-in group relative flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 transition-[box-shadow,outline,ring-color,background-color] duration-150 hover:ring-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
+      // Per-card stagger: 25 ms per index, capped at 20 cards so the last
+      // one starts no later than 500 ms after the first. Feels coordinated
+      // without anyone having to wait too long to see a card.
+      style={{ animationDelay: `${Math.min(index, 20) * 25}ms` }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">

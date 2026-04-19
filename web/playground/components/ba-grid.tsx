@@ -192,7 +192,7 @@ export function BaGrid({
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {visible.map(({ ba, forecast }) => (
+            {visible.map(({ ba, forecast }, i) => (
               <BaCard
                 key={ba}
                 ba={ba}
@@ -200,6 +200,7 @@ export function BaGrid({
                 interconnect={INTERCONNECT[ba]}
                 isRto={RTO_SET.has(ba)}
                 accentHex={accent(ba)}
+                index={i}
               />
             ))}
           </div>

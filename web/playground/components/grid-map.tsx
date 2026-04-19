@@ -262,7 +262,11 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
                   type="button"
                   onClick={() => onSelect(ba)}
                   aria-label={`Select ${BA_LABEL[ba]}`}
-                  className="group/pin relative flex items-center justify-center rounded-full transition-transform duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 active:scale-95"
+                  // Invisible 40×40 hit box via ::before — the visible pin
+                  // can be as small as 14 px for low-demand BAs, so the tap
+                  // target would otherwise be far below the 40 px floor
+                  // recommended for touch.
+                  className="group/pin relative flex items-center justify-center rounded-full transition-transform duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 active:scale-95 before:absolute before:left-1/2 before:top-1/2 before:h-10 before:w-10 before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
                   style={{ width: sizePx, height: sizePx }}
                 >
                   {selected === ba ? (
@@ -279,7 +283,7 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
                       background: BA_FILL_COLOR[ba],
                     }}
                   />
-                  <span className="absolute top-full mt-1 font-mono text-[10px] font-semibold tracking-wide whitespace-nowrap text-white mix-blend-difference">
+                  <span className="pointer-events-none absolute top-full mt-1 font-mono text-[10px] font-semibold tracking-wide whitespace-nowrap text-white mix-blend-difference">
                     {ba}
                   </span>
                 </button>

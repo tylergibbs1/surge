@@ -283,6 +283,9 @@ export function ForecastChart({
             fontSize: 11,
             fontWeight: 600,
             offset: 10,
+            // SVG <text> — Tailwind's tabular-nums class doesn't apply
+            // through Recharts' Label, so set the CSS prop directly.
+            style: { fontVariantNumeric: "tabular-nums" },
           }}
         />
       </ComposedChart>

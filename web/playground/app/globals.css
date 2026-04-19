@@ -160,3 +160,22 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Gentle "fade + slide up" used by the /grid card list. Per-card delay
+   is set inline on each element so 53 cards stagger in without forcing
+   53 distinct :nth-child rules here. The reduced-motion block above
+   clamps this to 1 ms automatically. */
+@keyframes surge-stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.surge-stagger-in {
+  animation: surge-stagger-in 360ms cubic-bezier(0.2, 0, 0, 1) both;
+  will-change: transform, opacity;
+}
