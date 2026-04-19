@@ -313,6 +313,10 @@ export function ForecastChart({
   )
 
   const nowMs = useNowTick()
+  // EIA's day-ahead reference line is on by default — showing the
+  // comparison is the whole point. Users who find it distracting can
+  // toggle it off per-session.
+  const [showEiaDf, setShowEiaDf] = useState(true)
 
   // All heavy derivations live in useMemo so the 60-second now-tick just
   // moves the ReferenceLine — it doesn't rebuild the 200+ row dataset,
@@ -369,15 +373,35 @@ export function ForecastChart({
   return (
     <figure className="space-y-2" role="group" aria-label={ariaSummary}>
       <p className="sr-only">{ariaSummary}</p>
-      {actualsError && !actuals ? (
-        <p
-          role="status"
-          className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 text-[10px] uppercase tracking-wider"
-        >
-          <span className="bg-amber-500 inline-block size-1.5 rounded-full" aria-hidden="true" />
-          Historical context unavailable — forecast-only view
-        </p>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2 text-[10px]">
+        {actualsError && !actuals ? (
+          <p
+            role="status"
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 uppercase tracking-wider"
+          >
+            <span className="bg-amber-500 inline-block size-1.5 rounded-full" aria-hidden="true" />
+            Historical context unavailable — forecast-only view
+          </p>
+        ) : null}
+        {hasEiaDf ? (
+          <button
+            type="button"
+            onClick={() => setShowEiaDf((v) => !v)}
+            aria-pressed={showEiaDf}
+            aria-label={`${showEiaDf ? "Hide" : "Show"} EIA day-ahead forecast reference line`}
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 uppercase tracking-wider ring-1 ring-foreground/5 transition-colors duration-150 hover:bg-foreground/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 active:scale-[0.97]"
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block h-[2px] w-4 rounded-sm bg-foreground/40"
+              style={{ opacity: showEiaDf ? 0.9 : 0.3 }}
+            />
+            <span className={showEiaDf ? "text-foreground" : ""}>
+              EIA day-ahead
+            </span>
+          </button>
+        ) : null}
+      </div>
       <ChartContainer config={chartConfig} className="h-[360px] w-full">
         <ComposedChart
           data={rows}
@@ -500,8 +524,8 @@ export function ForecastChart({
           {/* EIA's day-ahead demand forecast — the BA operator's own
               submission, shown as a ghost line so readers can eyeball
               surge's spread against operator consensus. Only drawn when
-              the BA actually publishes DF. */}
-          {hasEiaDf ? (
+              the BA actually publishes DF AND the user hasn't hidden it. */}
+          {hasEiaDf && showEiaDf ? (
             <Line
               yAxisId="load"
               type="linear"
