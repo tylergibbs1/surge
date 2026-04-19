@@ -3,6 +3,7 @@
 // updates the chart; dropdown update highlights the map.
 
 import Link from "next/link"
+import { Suspense } from "react"
 
 import { PlaygroundApp } from "@/components/playground-app"
 
@@ -40,7 +41,12 @@ export default function Page() {
           </nav>
         </header>
 
-        <PlaygroundApp />
+        {/* useSearchParams() inside PlaygroundApp forces client-side URL
+            reading; wrap in Suspense so the page can still statically
+            prerender its shell. */}
+        <Suspense fallback={null}>
+          <PlaygroundApp />
+        </Suspense>
 
         <footer className="text-muted-foreground text-xs">
           <p>
