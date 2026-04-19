@@ -101,7 +101,10 @@ async function fetchBaked(ba: BaCode, horizon: number): Promise<BakedResult> {
   let blobUrl: string
   try {
     const meta = await head(`forecasts/${ba}.json`, { token: BLOB_TOKEN })
-    blobUrl = meta.url
+    // Private stores: `url` points at the raw object (403s without auth),
+    // `downloadUrl` embeds a short-lived signed token so server-side fetch
+    // works with no extra headers.
+    blobUrl = meta.downloadUrl
   } catch (e) {
     return { ok: false, reason: `head-err:${String(e).slice(0, 40)}` }
   }
