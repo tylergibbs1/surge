@@ -23,7 +23,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated, Any, AsyncIterator
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -177,11 +177,20 @@ def forecast_stream(
     return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
+def _with_cache_headers(r: ForecastResponse, response) -> ForecastResponse:
+    # 5-minute edge + browser cache. Forecasts refresh hourly via cron, so
+    # serving a ≤5-min-stale reply across all readers is fine; dramatically
+    # reduces inference load when the link is on HN.
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+    return r
+
+
 @app.get("/forecast/{ba}", response_model=ForecastResponse, tags=["forecast"])
 def forecast_one(
     ba: str,
     pipe: PipeDep,
     request: Request,
+    response: Response,
     horizon: int = 24,
 ) -> ForecastResponse:
     ba = ba.upper()
@@ -200,4 +209,7 @@ def forecast_one(
     except Exception as e:  # pragma: no cover
         log.exception("forecast failed for %s", ba)
         raise HTTPException(status_code=500, detail=f"forecast failed: {e}") from e
-    return _build_response(ba, horizon, result, request.app.state.model_name)
+    return _with_cache_headers(
+        _build_response(ba, horizon, result, request.app.state.model_name),
+        response,
+    )

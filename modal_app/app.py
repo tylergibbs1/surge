@@ -73,13 +73,11 @@ app = modal.App(APP_NAME, image=image)
 @app.function(
     cpu=2.0,
     memory=4096,
-    # Scale-to-zero; idle workers drop after `scaledown_window` seconds of
-    # inactivity. Longer window = fewer cold starts but higher baseline cost.
-    scaledown_window=300,
-    min_containers=0,
-    # At most one concurrent request per container; Chronos-2 inference is
-    # CPU-bound so parallelism doesn't help — just scale horizontally.
-    max_containers=4,
+    # HN-launch config: keep one warm to kill cold-start on spike traffic,
+    # allow scale-out to 20 for burst, reclaim idle workers after 10 min.
+    scaledown_window=600,
+    min_containers=1,
+    max_containers=20,
     timeout=60,
 )
 @modal.concurrent(max_inputs=1)
