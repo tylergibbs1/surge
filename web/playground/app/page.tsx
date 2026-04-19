@@ -5,6 +5,7 @@
 import Link from "next/link"
 import { Suspense } from "react"
 
+import { Glossary } from "@/components/glossary"
 import { PlaygroundApp } from "@/components/playground-app"
 
 export default function Page() {
@@ -48,19 +49,31 @@ export default function Page() {
           <PlaygroundApp />
         </Suspense>
 
-        <footer className="text-muted-foreground text-xs">
-          <p>
-            Research and reference use only. Not for trading, regulated bidding,
-            or bankability-graded decisions.{" "}
+        <Glossary />
+
+        <footer className="text-muted-foreground space-y-2 text-xs">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <a
               href="https://github.com/tylergibbs1/surge"
-              className="underline"
+              className="underline-offset-4 hover:underline"
               target="_blank"
               rel="noreferrer"
             >
-              Code on GitHub
+              github.com/tylergibbs1/surge
             </a>
-            .
+            <span aria-hidden="true" className="text-foreground/20">·</span>
+            <a
+              href="https://huggingface.co/Tylerbry1/surge-fm-v3"
+              className="underline-offset-4 hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              huggingface.co/Tylerbry1/surge-fm-v3
+            </a>
+          </p>
+          <p>
+            Research and reference use only. Not for trading, regulated bidding,
+            or bankability-graded decisions.
           </p>
         </footer>
       </div>
