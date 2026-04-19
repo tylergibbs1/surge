@@ -109,7 +109,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         `forecasts/${ba}.json`,
         JSON.stringify(forecast),
         {
-          access: "public",
+          // The surge-blob store is configured private, so blobs are served
+          // via signed URLs only. The /api/forecast reader proxies the fetch
+          // server-side with the read-write token — browsers never see the URL.
+          access: "private",
           token: BLOB_TOKEN,
           contentType: "application/json",
           // Stable paths — overwrite yesterday's forecast rather than

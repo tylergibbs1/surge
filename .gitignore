@@ -67,3 +67,5 @@ web/**/*.log
 web/**/.env.local
 ._*
 .DS_Store
+.vercel
+.env*.local

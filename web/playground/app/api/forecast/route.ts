@@ -11,19 +11,24 @@
 // Mode is transparent to the client; the `x-surge-backend` response header
 // reports which path was used.
 
+import { head } from "@vercel/blob"
 import { NextRequest } from "next/server"
 
 import { BAS, type BaCode } from "@/lib/us-grid-geo"
+
+// The bake/read side talks to Vercel Blob via the @vercel/blob SDK; the
+// read-write token is auto-injected when the blob store is linked to the
+// project. On local dev BLOB_READ_WRITE_TOKEN is undefined — we short-
+// circuit the blob path and go straight to live inference.
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
+
+// The Blob route needs the Node runtime (the SDK isn't edge-safe).
+export const runtime = "nodejs"
 
 const API =
   process.env.SURGE_API_URL ??
   "https://tylergibbs1--surge-api-fastapi-app.modal.run"
 const RUNPOD_KEY = process.env.RUNPOD_API_KEY
-
-// Hostname of the Vercel Blob store's public CDN. Injected by Vercel when
-// a Blob store is linked to the project — falls back to undefined on
-// local dev, in which case we skip straight to live inference.
-const BLOB_BASE_URL = process.env.BLOB_BASE_URL
 
 // Max age of a baked payload we'll serve. Bake runs once a day (~06:15 UTC);
 // 25 h gives headroom for delayed or retried cron runs without serving
@@ -86,16 +91,22 @@ async function fetchBaked(
   ba: BaCode,
   horizon: number,
 ): Promise<ForecastResponse | null> {
-  if (!BLOB_BASE_URL) return null
-  // Trailing slash tolerance: let the env var be set either way.
-  const base = BLOB_BASE_URL.replace(/\/$/, "")
-  const url = `${base}/forecasts/${ba}.json`
+  if (!BLOB_TOKEN) return null
 
-  const r = await fetch(url, {
-    // Let Next.js / the Vercel edge cache respect the Cache-Control on the
-    // blob itself. We don't force no-store here.
-    next: { revalidate: 60 },
-  })
+  // Private-store lookup: head() hits the Vercel Blob API and returns a
+  // signed URL for the current version of the blob. Then we fetch that URL
+  // server-side — browsers never see the token. One extra RTT vs a
+  // public-CDN read, but still well under live-inference latency.
+  let blobUrl: string
+  try {
+    const meta = await head(`forecasts/${ba}.json`, { token: BLOB_TOKEN })
+    blobUrl = meta.url
+  } catch {
+    // 404 / not-yet-baked / store misconfigured — fall through to live.
+    return null
+  }
+
+  const r = await fetch(blobUrl, { next: { revalidate: 60 } })
   if (!r.ok) return null
 
   const payload = (await r.json()) as ForecastResponse
