@@ -87,11 +87,12 @@ function isRunPod(): boolean {
 
 // ─── Baked path (fast) ─────────────────────────────────────────────────
 
-async function fetchBaked(
-  ba: BaCode,
-  horizon: number,
-): Promise<ForecastResponse | null> {
-  if (!BLOB_TOKEN) return null
+type BakedResult =
+  | { ok: true; payload: ForecastResponse }
+  | { ok: false; reason: string }
+
+async function fetchBaked(ba: BaCode, horizon: number): Promise<BakedResult> {
+  if (!BLOB_TOKEN) return { ok: false, reason: "no-token" }
 
   // Private-store lookup: head() hits the Vercel Blob API and returns a
   // signed URL for the current version of the blob. Then we fetch that URL
@@ -101,30 +102,32 @@ async function fetchBaked(
   try {
     const meta = await head(`forecasts/${ba}.json`, { token: BLOB_TOKEN })
     blobUrl = meta.url
-  } catch {
-    // 404 / not-yet-baked / store misconfigured — fall through to live.
-    return null
+  } catch (e) {
+    return { ok: false, reason: `head-err:${String(e).slice(0, 40)}` }
   }
 
   const r = await fetch(blobUrl, { next: { revalidate: 60 } })
-  if (!r.ok) return null
+  if (!r.ok) return { ok: false, reason: `fetch-${r.status}` }
 
   const payload = (await r.json()) as ForecastResponse
 
   // Stale check: don't silently serve forecasts from last week if the bake
   // cron has been broken.
   const ageMs = Date.now() - Date.parse(payload.as_of_utc)
-  if (!Number.isFinite(ageMs) || ageMs > BAKED_MAX_AGE_MS) return null
+  if (!Number.isFinite(ageMs)) return { ok: false, reason: "bad-as_of" }
+  if (ageMs > BAKED_MAX_AGE_MS) {
+    return { ok: false, reason: `stale-${Math.round(ageMs / 3600_000)}h` }
+  }
 
   // Baked payload is at horizon=168. Slice down to what the client asked
   // for; never up (if someone asks for 169 we have to fall back to live).
-  if (payload.points.length < horizon) return null
-  const sliced = {
-    ...payload,
-    horizon,
-    points: payload.points.slice(0, horizon),
+  if (payload.points.length < horizon) {
+    return { ok: false, reason: `short-${payload.points.length}` }
   }
-  return sliced
+  return {
+    ok: true,
+    payload: { ...payload, horizon, points: payload.points.slice(0, horizon) },
+  }
 }
 
 // ─── Live inference path (fallback) ────────────────────────────────────
@@ -188,13 +191,14 @@ export async function GET(req: NextRequest): Promise<Response> {
     )
   }
 
-  // Fast path: baked JSON from Vercel Blob. Skipped when force=1 or
-  // BLOB_BASE_URL isn't configured.
+  // Fast path: baked JSON from Vercel Blob. Skipped when force=1 or the
+  // read-write token isn't configured.
+  let blobReason = "skipped"
   if (!force) {
     try {
       const baked = await fetchBaked(ba as BaCode, horizon)
-      if (baked) {
-        return new Response(JSON.stringify(baked), {
+      if (baked.ok) {
+        return new Response(JSON.stringify(baked.payload), {
           status: 200,
           headers: {
             ...CACHE_HEADERS,
@@ -203,9 +207,11 @@ export async function GET(req: NextRequest): Promise<Response> {
           },
         })
       }
-    } catch {
+      blobReason = baked.reason
+    } catch (e) {
       // Don't let a blob hiccup take the whole endpoint down; fall through
       // to live inference.
+      blobReason = `exc:${String(e).slice(0, 40)}`
     }
   }
 
@@ -244,6 +250,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       "content-type": "application/json",
       "x-upstream-latency-ms": String(elapsed),
       "x-surge-backend": isRunPod() ? "runpod" : "modal",
+      "x-blob-fallback-reason": blobReason,
     },
   })
 }
