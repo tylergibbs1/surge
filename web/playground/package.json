@@ -5,7 +5,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "dev:webpack": "next dev --no-turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
