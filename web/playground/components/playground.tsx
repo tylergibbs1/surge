@@ -6,7 +6,7 @@ import useSWR from "swr"
 
 import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
 import { RefreshIcon } from "@/components/refresh-icon"
-import type { BaCode } from "@/lib/us-grid-geo"
+import { BA_LABEL, BA_UTC_OFFSET, type BaCode } from "@/lib/us-grid-geo"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -31,6 +31,29 @@ const ForecastChart = dynamic(
   () => import("@/components/forecast-chart").then((m) => m.ForecastChart),
   { ssr: false, loading: () => <ForecastChartSkeleton /> },
 )
+
+function fmtRelative(fromIso: string): string {
+  const ms = Date.now() - new Date(fromIso).getTime()
+  if (ms < 60_000) return "just now"
+  const m = Math.round(ms / 60_000)
+  if (m < 60) return `${m}m ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.round(h / 24)}d ago`
+}
+
+function fmtLocalPeakTime(tsUtc: string, ba: BaCode): string {
+  // Approximate local-time display using the BA's standard-time offset.
+  const d = new Date(tsUtc)
+  const local = new Date(d.getTime() + BA_UTC_OFFSET[ba] * 3600 * 1000)
+  return local.toLocaleString("en-US", {
+    weekday: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
+  })
+}
 
 async function fetcher(url: string): Promise<ForecastResponse> {
   const r = await fetch(url)
@@ -80,8 +103,7 @@ export function Playground({
 
   const stats = useMemo(() => {
     if (!data) return null
-    // Single-pass peak + mean. Avoids Math.max(...map(...)) double traversal
-    // and the spread-into-stack cost on long horizons.
+    // Single-pass peak + mean.
     let peak = -Infinity
     let peakPt = data.points[0]
     let sum = 0
@@ -92,7 +114,10 @@ export function Playground({
     const mean = sum / data.points.length
     const first = data.points[0]
     const piPct = ((first.p90_mw - first.p10_mw) / first.median_mw) * 100
-    return { peak, peakPt, mean, piPct }
+    // Peak above mean — replaces "vs yesterday" (we don't have yesterday's
+    // data on the client) with something just as informative.
+    const peakDeltaPct = ((peak - mean) / mean) * 100
+    return { peak, peakPt, mean, piPct, peakDeltaPct }
   }, [data])
 
   return (
@@ -105,6 +130,41 @@ export function Playground({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Hero strip: eyebrow label + peak number + delta + live dot */}
+        <div className="border-b pb-3">
+          <div className="text-muted-foreground flex items-center justify-between text-[11px] font-medium tracking-wide uppercase">
+            <span>
+              {BA_LABEL[ba]} · Day-ahead load
+            </span>
+            <span className="flex items-center gap-1.5 font-mono normal-case tabular-nums">
+              <span
+                className="bg-chart-1 inline-block size-1.5 rounded-full"
+                style={{ boxShadow: "0 0 6px var(--chart-1)" }}
+              />
+              {data ? `updated ${fmtRelative(data.as_of_utc)}` : "loading…"}
+            </span>
+          </div>
+          <div className="mt-1.5 flex items-baseline gap-3">
+            <span className="text-foreground text-4xl font-semibold tracking-tight tabular-nums">
+              {stats ? (stats.peak / 1000).toFixed(1) : "—"}
+            </span>
+            <span className="text-muted-foreground text-sm">GW peak</span>
+            {stats ? (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-muted-foreground font-mono text-sm tabular-nums">
+                  {fmtLocalPeakTime(stats.peakPt.ts_utc, ba)} local
+                </span>
+                <span className="text-muted-foreground">·</span>
+                <span className="font-mono text-sm tabular-nums text-emerald-500">
+                  ▲ {stats.peakDeltaPct.toFixed(1)}%
+                </span>
+                <span className="text-muted-foreground text-xs">vs window mean</span>
+              </>
+            ) : null}
+          </div>
+        </div>
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-muted-foreground text-xs font-medium uppercase">
@@ -170,7 +230,7 @@ export function Playground({
           </Button>
         </div>
 
-        {data ? <ForecastChart forecast={data} /> : <ForecastChartSkeleton />}
+        {data ? <ForecastChart forecast={data} ba={ba} /> : <ForecastChartSkeleton />}
 
         {stats ? (
           <div className="text-muted-foreground grid grid-cols-2 gap-4 border-t pt-4 text-sm tabular-nums md:grid-cols-3">

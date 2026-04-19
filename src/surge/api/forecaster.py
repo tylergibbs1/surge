@@ -146,6 +146,7 @@ def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
             "median_mw": float(q[i, 1]),
             "p10_mw": float(q[i, 0]),
             "p90_mw": float(q[i, 2]),
+            "temp_c": float(temp_future[i]),
         })
 
     return {

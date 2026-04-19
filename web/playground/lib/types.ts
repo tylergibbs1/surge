@@ -3,6 +3,9 @@ export type ForecastPoint = {
   median_mw: number
   p10_mw: number
   p90_mw: number
+  /** Assumed future temperature (°C) at BA centroid station. May be null
+   *  on older API versions. */
+  temp_c?: number | null
 }
 
 export type ForecastResponse = {

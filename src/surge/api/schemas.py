@@ -13,6 +13,11 @@ class ForecastPoint(BaseModel):
     median_mw: float = Field(..., description="Point forecast (median)")
     p10_mw: float = Field(..., description="10th percentile — lower end of 80% PI")
     p90_mw: float = Field(..., description="90th percentile — upper end of 80% PI")
+    temp_c: float | None = Field(
+        None,
+        description="Future-covariate temperature at BA centroid station (°C). "
+        "Assumes perfect forecast — see README Limitations.",
+    )
 
 
 class ForecastResponse(BaseModel):

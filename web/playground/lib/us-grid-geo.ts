@@ -42,6 +42,15 @@ export const BA_LABEL: Record<BaCode, string> = {
   SWPP: "Southwest Power Pool",
 }
 
+// Rough standard-time UTC offsets for diurnal shading. Close enough that
+// the overnight bands on the chart line up visually; not used for any
+// computation that needs correctness.
+export const BA_UTC_OFFSET: Record<BaCode, number> = {
+  PJM: -5, NYIS: -5, ISNE: -5,   // Eastern
+  MISO: -6, ERCO: -6, SWPP: -6,  // Central
+  CISO: -8,                      // Pacific
+}
+
 // Best-fit BA per US state (2-letter code). States overlapping multiple
 // BAs get their majority-footprint BA. Unassigned states (WECC-only, FRCC,
 // SERC) stay undefined and render as a neutral mid-gray.
