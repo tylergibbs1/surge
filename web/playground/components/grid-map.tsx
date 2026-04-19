@@ -109,6 +109,12 @@ function GridPolygons({
 }) {
   const { map, isLoaded } = useMap()
   const [polyError, setPolyError] = useState<string | null>(null)
+  // Hold the enriched features in React state rather than reaching into
+  // MapLibre's private `_data` (which stopped being an object literal
+  // in maplibre-gl 5.x — it can be a URL, a promise, or undefined).
+  // Owning the array here makes the paint effect below decoupled from
+  // MapLibre internals and re-runs deterministically when features land.
+  const [features, setFeatures] = useState<GeoJSON.Feature[] | null>(null)
 
   useEffect(() => {
     if (!map || !isLoaded) return
@@ -172,25 +178,25 @@ function GridPolygons({
           paint: {
             "line-color": ["case",
               ["has", "ba"], "hsla(0 0% 100% / 0.35)", "hsla(0 0% 100% / 0.08)"],
-            "line-width": ["case",
-              ["==", ["get", "ba"], ["literal", selected]], 2.5, 0.6],
+            "line-width": 0.6,
           },
         })
       }
+      setFeatures(data.features)
     })()
 
     return () => { cancelled = true }
-  }, [map, isLoaded, selected])
+    // `selected` is intentionally excluded — the third effect below
+    // handles outline-width updates without needing to re-fetch geojson.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, isLoaded])
 
-  // Paint % of peak when forecasts update.
+  // Paint % of peak when forecasts update. Gated on `features` so the
+  // loop can't run before the source exists.
   useEffect(() => {
-    if (!map || !isLoaded) return
-    const src = map.getSource("us-states") as unknown as {
-      _data?: GeoJSON.FeatureCollection
-    } | undefined
-    if (!src?._data) return
+    if (!map || !isLoaded || !features) return
 
-    for (const f of src._data.features) {
+    for (const f of features) {
       const ba = (f.properties as { ba?: BaCode | null })?.ba
       if (!ba || !forecasts[ba] || f.id == null) continue
       const peak = forecasts[ba]!.points.reduce(
@@ -206,7 +212,7 @@ function GridPolygons({
         { pct_peak: 0.40 + pct * 0.40 },
       )
     }
-  }, [map, isLoaded, forecasts])
+  }, [map, isLoaded, forecasts, features])
 
   // Re-style outline when `selected` changes.
   useEffect(() => {
