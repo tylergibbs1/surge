@@ -6,9 +6,7 @@ import useSWR from "swr"
 
 import { ErrorBanner } from "@/components/error-banner"
 import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
-import { RefreshIcon } from "@/components/refresh-icon"
 import { BA_LABEL, BA_UTC_OFFSET, type BaCode } from "@/lib/us-grid-geo"
-import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -85,7 +83,7 @@ export function Playground({
 
   // Single fetch at max horizon; slider just slices. SWR's key stays
   // stable regardless of slider value so rapid drags don't even stream.
-  const { data: full, error, isLoading, mutate } = useSWR<ForecastResponse>(
+  const { data: full, error } = useSWR<ForecastResponse>(
     `/api/forecast?ba=${ba}&horizon=${MAX_HORIZON}`,
     fetcher,
     {
@@ -224,32 +222,20 @@ export function Playground({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-muted-foreground min-w-0 flex-1 text-xs">
-            {data ? (
-              <>
-                Forecast starts{" "}
-                <span className="font-mono">
-                  {new Date(data.points[0]?.ts_utc).toISOString().slice(0, 16)}Z
-                </span>{" "}
-                · {horizon} hourly steps · model{" "}
-                <span className="font-mono">{data.model}</span>
-              </>
-            ) : error ? null : (
-              "Loading forecast…"
-            )}
-          </p>
-          <Button
-            onClick={() => mutate()}
-            disabled={isLoading}
-            size="sm"
-            variant="outline"
-            className="gap-2 transition-transform duration-100 active:scale-[0.96]"
-          >
-            <RefreshIcon loading={isLoading} />
-            Refresh
-          </Button>
-        </div>
+        <p className="text-muted-foreground text-xs">
+          {data ? (
+            <>
+              Forecast starts{" "}
+              <span className="font-mono">
+                {new Date(data.points[0]?.ts_utc).toISOString().slice(0, 16)}Z
+              </span>{" "}
+              · {horizon} hourly steps · model{" "}
+              <span className="font-mono">{data.model}</span>
+            </>
+          ) : error ? null : (
+            "Loading forecast…"
+          )}
+        </p>
 
         {error && !data ? (
           <ErrorBanner
