@@ -75,6 +75,13 @@ def _scan(hours: int) -> dict[str, Any]:
             .filter(pl.col("load_mw").is_not_null())
             .filter(pl.col("load_mw") > 0)
             .filter(pl.col("load_mw") < _SANE_BA_MW_CEILING)
+            # Dedupe on (ts_utc, ba): `store.append` isn't idempotent —
+            # overlapping ingest windows (e.g. running `--days 7` then
+            # `--days 120`) write the same row twice and the aggregate
+            # doubles. Prefer the most-recently-written copy so in-place
+            # EIA revisions are honoured.
+            .sort(["ts_utc", "ba", "as_of"], descending=[False, False, True])
+            .unique(subset=["ts_utc", "ba"], keep="first")
             .group_by("ts_utc")
             .agg(
                 pl.col("load_mw").sum().alias("total_mw"),
