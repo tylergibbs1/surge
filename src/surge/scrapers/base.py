@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+
+# httpx and httpcore log every request URL at INFO level — including any
+# credentials carried as query params (EIA api_key=…, NREL &api_key=…). Keep
+# them at WARNING so they never land in log files or CI output.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 DEFAULT_HEADERS = {
@@ -35,7 +42,7 @@ def _scrub_url(url: str) -> str:
         if "=" not in kv:
             pairs.append(kv)
             continue
-        k, v = kv.split("=", 1)
+        k, _v = kv.split("=", 1)
         if k.lower() in _SECRET_PARAMS:
             pairs.append(f"{k}=REDACTED")
         else:
@@ -67,9 +74,13 @@ def client(**kwargs) -> httpx.Client:
 _transient = (httpx.TimeoutException, httpx.NetworkError, httpx.RemoteProtocolError)
 
 
+# Longer backoff than httpx defaults — when Iowa Mesonet 429s (common on
+# bulk/historical pulls) its cool-down is minutes, not seconds, so we want
+# the retry window to cover a real throttle cycle instead of erroring out
+# after 30s and wasting the whole refresh.
 @retry(
-    stop=stop_after_attempt(5),
-    wait=wait_exponential(multiplier=1, min=1, max=30),
+    stop=stop_after_attempt(8),
+    wait=wait_exponential(multiplier=2, min=2, max=120),
     retry=retry_if_exception_type(_transient),
     reraise=True,
 )

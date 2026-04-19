@@ -17,7 +17,7 @@ modal deploy modal_app/app.py
 ```
 
 First deploy builds the image remotely (~3–5 min, includes pre-pulling the
-`Tylerbry1/surge-fm-v2` checkpoint). Later deploys reuse the layer cache
+`Tylerbry1/surge-fm-v3` checkpoint). Later deploys reuse the layer cache
 and take ~15 s.
 
 After deploy you'll see:

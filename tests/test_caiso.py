@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -12,13 +12,13 @@ from surge.scrapers import caiso
 
 
 def test_fmt_utc() -> None:
-    dt = datetime(2026, 1, 1, 12, 30, tzinfo=timezone.utc)
+    dt = datetime(2026, 1, 1, 12, 30, tzinfo=UTC)
     assert caiso._fmt(dt) == "20260101T12:30-0000"
 
 
 def test_iter_windows_chunks_31d() -> None:
-    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    end = datetime(2024, 4, 1, tzinfo=timezone.utc)
+    start = datetime(2024, 1, 1, tzinfo=UTC)
+    end = datetime(2024, 4, 1, tzinfo=UTC)
     wins = list(caiso._iter_windows(start, end, days=28))
     assert len(wins) >= 3
     assert wins[0][0] == start
@@ -54,8 +54,8 @@ def test_fetch_windows_and_sends_correct_params(monkeypatch) -> None:
 
     frames = caiso.fetch(
         "PRC_LMP",
-        datetime(2024, 1, 1, tzinfo=timezone.utc),
-        datetime(2024, 2, 15, tzinfo=timezone.utc),
+        datetime(2024, 1, 1, tzinfo=UTC),
+        datetime(2024, 2, 15, tzinfo=UTC),
         node="TH_NP15_GEN-APND",
     )
     assert len(calls) == 2  # 46-day range auto-chunks into two windows

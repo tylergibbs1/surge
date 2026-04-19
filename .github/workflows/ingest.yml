@@ -11,17 +11,35 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # GitHub's shared runner IPs are shared with other tenants, and Iowa
+      # Mesonet rate-limits aggressively on shared egress. Weather is
+      # therefore best-effort; load (EIA-930) is required.
+      EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+      SURGE_DATA_DIR: ${{ runner.temp }}/surge-data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$EIA_API_KEY" ]; then
+            echo "::error::EIA_API_KEY secret is not set. Add it at Settings → Secrets → Actions." >&2
+            exit 1
+          fi
+
       - run: pip install -e .
-      - run: python -m surge.ingest --days 7
-        env:
-          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
-          SURGE_DATA_DIR: ${{ runner.temp }}/surge-data
+
+      - name: Refresh load (EIA-930, required)
+        run: python -m surge.ingest --days 7 --skip-weather
+
+      - name: Refresh weather (ASOS, best-effort — Mesonet rate-limits GH IPs)
+        continue-on-error: true
+        run: python -m surge.ingest --days 7 --skip-load
+
       - name: Upload refreshed parquet
         uses: actions/upload-artifact@v4
         with:

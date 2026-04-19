@@ -48,7 +48,10 @@ const STATE_NAME_TO_CODE: Record<string, string> = {
   "Puerto Rico": "PR",
 }
 
-const BA_FILL_COLOR: Record<BaCode, string> = {
+// ISOs get distinctive hues; non-ISO BAs inherit a muted interconnect tint
+// (warm olive for Eastern, cool sage for Western) so the map still reads as
+// "color == organized market" without going visually noisy at 53 BAs.
+const _ISO_COLOR: Partial<Record<BaCode, string>> = {
   PJM:  "#4F8DF7",  // indigo
   CISO: "#F4B740",  // amber
   ERCO: "#E05263",  // coral
@@ -57,6 +60,31 @@ const BA_FILL_COLOR: Record<BaCode, string> = {
   ISNE: "#F07FB0",  // pink
   SWPP: "#6BC4E0",  // sky
 }
+const _EASTERN_NONISO = "#7A8B6E"  // muted olive
+const _WESTERN_NONISO = "#6E8A8B"  // muted sage
+const _INTERCONNECT: Record<BaCode, "Eastern" | "Western" | "Texas"> = {
+  PJM: "Eastern", CISO: "Western", ERCO: "Texas", MISO: "Eastern",
+  NYIS: "Eastern", ISNE: "Eastern", SWPP: "Eastern",
+  SOCO: "Eastern", TVA: "Eastern", FPL: "Eastern", DUK: "Eastern",
+  CPLE: "Eastern", BPAT: "Western", FPC: "Eastern", AZPS: "Western",
+  LGEE: "Eastern", PSCO: "Western", SRP: "Western", NEVP: "Western",
+  PACE: "Western", LDWP: "Western", SCEG: "Eastern", PSEI: "Western",
+  SC: "Eastern", TEC: "Eastern", AECI: "Eastern", PGE: "Western",
+  IPCO: "Western", FMPP: "Eastern", PACW: "Western", WACM: "Western",
+  BANC: "Western", JEA: "Eastern", TEPC: "Western", SEC: "Eastern",
+  WALC: "Western", CPLW: "Eastern", EPE: "Western", PNM: "Western",
+  NWMT: "Western", AVA: "Western", SCL: "Western", SPA: "Eastern",
+  IID: "Western", TPWR: "Western", WAUW: "Western", TAL: "Eastern",
+  TIDC: "Western", GCPD: "Western", GVL: "Eastern", CHPD: "Western",
+  DOPD: "Western", HST: "Eastern",
+}
+const BA_FILL_COLOR: Record<BaCode, string> = Object.fromEntries(
+  BAS.map((b) => [
+    b,
+    _ISO_COLOR[b] ??
+      (_INTERCONNECT[b] === "Western" ? _WESTERN_NONISO : _EASTERN_NONISO),
+  ]),
+) as Record<BaCode, string>
 
 type Props = {
   horizon?: number
@@ -95,23 +123,22 @@ function GridPolygons({
 
       if (!map.getSource("us-states")) {
         map.addSource("us-states", { type: "geojson", data })
+        // Mapbox GL's `match` expression requires alternating
+        // literal/value pairs ending in a default. The TS types want a
+        // statically-known tuple, so we build the array dynamically and
+        // cast — the runtime shape matches the spec.
+        const fillColorExpr = [
+          "match",
+          ["get", "ba"],
+          ...BAS.flatMap((b) => [b, BA_FILL_COLOR[b]]),
+          "hsl(0 0% 22%)",
+        ] as never
         map.addLayer({
           id: "ba-fills",
           type: "fill",
           source: "us-states",
           paint: {
-            "fill-color": [
-              "match",
-              ["get", "ba"],
-              "PJM",  BA_FILL_COLOR.PJM,
-              "CISO", BA_FILL_COLOR.CISO,
-              "ERCO", BA_FILL_COLOR.ERCO,
-              "MISO", BA_FILL_COLOR.MISO,
-              "NYIS", BA_FILL_COLOR.NYIS,
-              "ISNE", BA_FILL_COLOR.ISNE,
-              "SWPP", BA_FILL_COLOR.SWPP,
-              /* default */ "hsl(0 0% 22%)",
-            ],
+            "fill-color": fillColorExpr,
             "fill-opacity": [
               "case",
               ["has", "ba"],

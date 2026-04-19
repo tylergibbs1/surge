@@ -25,6 +25,7 @@ import torch
 
 from chronos import BaseChronosPipeline
 from experiments.features import load_multi_ba
+from surge import bas as _bas
 
 
 def set_seed(s: int) -> None:
@@ -44,7 +45,10 @@ def _task(bd, start: int, end: int) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="amazon/chronos-2")
-    ap.add_argument("--bas", nargs="+", default=["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"])
+    # Default: every BA with a demand series (see surge.bas). Override with
+    # --bas for targeted experiments or v1 reproduction (--bas PJM CISO ERCO
+    # MISO NYIS ISNE SWPP).
+    ap.add_argument("--bas", nargs="+", default=_bas.demand_codes())
     ap.add_argument("--context", type=int, default=2048)
     ap.add_argument("--horizon", type=int, default=24)
     ap.add_argument("--mode", choices=["full", "lora"], default="lora")

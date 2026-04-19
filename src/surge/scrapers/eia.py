@@ -7,7 +7,7 @@ Route: electricity/rto/region-data (demand, generation, net generation, intercha
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -61,7 +61,7 @@ def load(ba: str, start: str, end: str) -> pl.DataFrame:
         return pl.DataFrame(schema={"ts_utc": pl.Datetime(time_zone="UTC"),
                                     "ba": pl.Utf8, "load_mw": pl.Float64})
 
-    as_of = datetime.now(tz=timezone.utc)
+    as_of = datetime.now(tz=UTC)
     df = (
         pl.DataFrame(rows)
         .select(

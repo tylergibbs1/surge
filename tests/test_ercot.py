@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -107,7 +107,7 @@ def test_fetch_report_applies_since_and_limit(monkeypatch) -> None:
     monkeypatch.setattr(httpx, "Client",
                         lambda *a, **kw: real_client(*a, transport=transport, **kw))
 
-    since = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    since = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
     df = ercot.fetch_report("rt_lmp", since=since, limit=1)
     assert df.height == 1
     assert "_doc_id" in df.columns

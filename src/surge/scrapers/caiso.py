@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 
-import httpx
 import polars as pl
 
 from surge import store
@@ -41,8 +40,8 @@ QUERIES: dict[str, tuple[int, str]] = {
 def _fmt(dt: datetime) -> str:
     """CAISO wants YYYYMMDDTHH:mm-0000 (UTC with zulu offset literal)."""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    dt = dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    dt = dt.astimezone(UTC)
     return dt.strftime("%Y%m%dT%H:%M-0000")
 
 
@@ -73,10 +72,7 @@ def fetch(
     When persist=True, each window is written to the `caiso_{queryname}`
     dataset keyed by the (node, start, end) tuple.
     """
-    if queryname in QUERIES:
-        dver, dmarket = QUERIES[queryname]
-    else:
-        dver, dmarket = 1, "DAM"
+    dver, dmarket = QUERIES.get(queryname, (1, "DAM"))
     version = version or dver
     market_run_id = market_run_id or dmarket
 

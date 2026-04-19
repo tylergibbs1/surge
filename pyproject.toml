@@ -78,6 +78,23 @@ addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 
 [tool.mypy]
+# Not `strict = true` on purpose: scrapers/ and the inference path rely on
+# third-party libs without stubs (chronos, holidays, polars expr chains)
+# where strict mode would drown real signal in "missing annotation" noise.
 python_version = "3.11"
-strict = true
 ignore_missing_imports = true
+check_untyped_defs = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+# Per-module opt-outs for files that lean heavily on dynamic third-party
+# APIs. New code (bas.py, api/schemas.py, tests/) still gets type-checked.
+[[tool.mypy.overrides]]
+module = [
+    "surge.scrapers.*",
+    "surge.api.main",
+    "surge.api.forecaster",
+    "surge.store",
+    "surge.cache",
+]
+ignore_errors = true

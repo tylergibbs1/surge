@@ -13,11 +13,11 @@ export default function Page() {
             Surge playground
           </h1>
           <p className="text-muted-foreground max-w-3xl">
-            Open probabilistic day-ahead load forecasts for 7 US balancing
-            authorities. Click a region on the map or pick from the dropdown.
-            Model: Chronos-2 fine-tuned on 7 years of public data. Test MASE
-            0.45, ~2% MAPE — matching what utilities pay tens of thousands
-            per year for.
+            Open probabilistic day-ahead load forecasts for all 53 US
+            balancing authorities that publish a demand series to EIA-930.
+            Click a region on the map or pick from the dropdown. Model:
+            Chronos-2 fine-tuned on 7 years of public data — matching what
+            utilities pay tens of thousands per year for.
           </p>
         </header>
 

@@ -31,7 +31,7 @@ import hashlib
 import io
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
@@ -117,7 +117,7 @@ def record(
     row = pl.DataFrame({
         "source": [source],
         "key": [key],
-        "fetched_at": [datetime.now(tz=timezone.utc)],
+        "fetched_at": [datetime.now(tz=UTC)],
         "n_rows": [n_rows],
         "sha256": [sha256 or ""],
     })

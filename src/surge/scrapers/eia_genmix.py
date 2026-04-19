@@ -5,7 +5,7 @@ Uses the same v2 API as load but with the fuel-type-data route.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -62,7 +62,7 @@ def fetch(ba: str, fueltype: str, start: str, end: str) -> pl.DataFrame:
           )
           .with_columns(
               pl.lit("eia-930-fuel").alias("source"),
-              pl.lit(datetime.now(tz=timezone.utc)).alias("as_of"),
+              pl.lit(datetime.now(tz=UTC)).alias("as_of"),
           ))
 
     store.write_through(

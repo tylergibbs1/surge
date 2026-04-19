@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import polars as pl
 import pytest
@@ -10,9 +10,9 @@ def test_enforce_reorders_and_casts() -> None:
     df = pl.DataFrame({
         "load_mw": [100, 200],
         "ba": ["PJM", "PJM"],
-        "as_of": [datetime(2024, 1, 1, tzinfo=timezone.utc)] * 2,
+        "as_of": [datetime(2024, 1, 1, tzinfo=UTC)] * 2,
         "source": ["eia-930"] * 2,
-        "ts_utc": [datetime(2024, 1, 1, tzinfo=timezone.utc)] * 2,
+        "ts_utc": [datetime(2024, 1, 1, tzinfo=UTC)] * 2,
     })
     out = schemas.enforce(df, schemas.LOAD)
     assert out.columns == list(schemas.LOAD)

@@ -6,7 +6,7 @@ model and passes it into this module via `forecast_ba(pipe=..., ba=...)`.
 from __future__ import annotations
 
 import os
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,11 +16,12 @@ import polars as pl
 
 from surge import store
 
-
 # Prefer HF Hub (so users don't need to download 478 MB before running). If
 # a local path override is set, use that (e.g. during offline dev or CI).
-_DEFAULT_HF = "Tylerbry1/surge-fm-v2"
-_LOCAL_FALLBACK = Path(__file__).resolve().parents[3] / "models" / "chronos2_full_v2"
+# Default is the 53-BA surge-fm-v3 generalist; set SURGE_MODEL_PATH=
+# Tylerbry1/surge-fm-v2 to serve the 7-RTO specialist instead.
+_DEFAULT_HF = "Tylerbry1/surge-fm-v3"
+_LOCAL_FALLBACK = Path(__file__).resolve().parents[3] / "models" / "chronos2_full_v3"
 MODEL_PATH = os.environ.get(
     "SURGE_MODEL_PATH",
     str(_LOCAL_FALLBACK) if _LOCAL_FALLBACK.exists() else _DEFAULT_HF,
@@ -29,9 +30,9 @@ MODEL_PATH = os.environ.get(
 # upstream-repo takeover (the loader would otherwise pull `main` which is
 # mutable). Override via env when publishing a new checkpoint.
 MODEL_REVISION = os.environ.get(
-    "SURGE_MODEL_REVISION", "f4a6b9ebebb73dbe4138736a76442c8bbe2430ae"
+    "SURGE_MODEL_REVISION", "b84726ca520b9d443236d025a000cc95616a334c"
 )
-MODEL_NAME = "surge-fm-v2"
+MODEL_NAME = "surge-fm-v3"
 CONTEXT_LENGTH = 2048
 
 US_HOLIDAYS = holidays.UnitedStates()
@@ -47,7 +48,11 @@ def _ffill(x: np.ndarray) -> np.ndarray:
             last = out[i]
     m = np.isnan(out)
     if m.any():
-        out[m] = out[~m][0]
+        # Backfill leading NaNs; fall back to 0 if the whole array is NaN
+        # (e.g. a BA we've never ingested weather for — served as a flat
+        # covariate rather than crashing the forecast).
+        real = out[~m]
+        out[m] = real[0] if real.size else 0.0
     return out
 
 
@@ -140,7 +145,7 @@ def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
 
     points = []
     for i in range(horizon):
-        ts_i = future_ts[i].astype("datetime64[s]").astype(datetime).replace(tzinfo=timezone.utc)
+        ts_i = future_ts[i].astype("datetime64[s]").astype(datetime).replace(tzinfo=UTC)
         points.append({
             "ts_utc": ts_i,
             "median_mw": float(q[i, 1]),
@@ -151,6 +156,6 @@ def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
 
     return {
         "points": points,
-        "context_start_utc": bd["ts"][start_idx].astype("datetime64[s]").astype(datetime).replace(tzinfo=timezone.utc),
-        "context_end_utc":   bd["ts"][end_idx - 1].astype("datetime64[s]").astype(datetime).replace(tzinfo=timezone.utc),
+        "context_start_utc": bd["ts"][start_idx].astype("datetime64[s]").astype(datetime).replace(tzinfo=UTC),
+        "context_end_utc":   bd["ts"][end_idx - 1].astype("datetime64[s]").astype(datetime).replace(tzinfo=UTC),
     }

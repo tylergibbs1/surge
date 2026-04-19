@@ -59,8 +59,8 @@ export default async function OpengraphImage() {
               maxWidth: 900,
             }}
           >
-            Chronos-2 fine-tuned on 7 years of public data. Test MASE 0.45
-            across 7 ISOs — matches utility-internal accuracy. Free &
+            Chronos-2 fine-tuned on 7 years of public data. 53 US
+            balancing authorities — every EIA-930 demand series. Free &
             open-source.
           </p>
         </div>
@@ -76,8 +76,8 @@ export default async function OpengraphImage() {
         >
           <span>github.com/tylergibbs1/surge</span>
           <span style={{ display: "flex", gap: 20 }}>
-            <span>PJM · CAISO · ERCOT · MISO</span>
-            <span>NYISO · ISO-NE · SPP</span>
+            <span>53 BAs · 3 interconnections</span>
+            <span>surge-fm-v3</span>
           </span>
         </div>
       </div>

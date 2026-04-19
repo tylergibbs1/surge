@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from experiments.features import BAData, load_multi_ba
+from surge import bas as _bas
 
 warnings.filterwarnings("ignore")
 
@@ -221,7 +222,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True, choices=list(RUNNERS))
     ap.add_argument("--bas", nargs="+",
-                    default=["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"])
+                    default=_bas.demand_codes())
     ap.add_argument("--on", default="val")
     ap.add_argument("--with-gen", action="store_true")
     args = ap.parse_args()

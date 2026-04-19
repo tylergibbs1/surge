@@ -19,12 +19,12 @@ export type ForecastResponse = {
   points: ForecastPoint[]
 }
 
-export const BAS = [
-  { code: "PJM",  name: "PJM Interconnection (DC, Philly, Chicago)" },
-  { code: "CISO", name: "California ISO" },
-  { code: "ERCO", name: "ERCOT (Texas)" },
-  { code: "MISO", name: "Midcontinent ISO" },
-  { code: "NYIS", name: "New York ISO" },
-  { code: "ISNE", name: "ISO-NE (New England)" },
-  { code: "SWPP", name: "Southwest Power Pool" },
-] as const
+// Selector options. Mirrors the `BAS` + `BA_LABEL` pair in us-grid-geo; kept
+// here so UI components that don't need geographic metadata can import from
+// a flatter module. Source of truth is src/surge/bas.py.
+import { BAS as BA_CODES, BA_LABEL } from "./us-grid-geo"
+
+export const BAS = BA_CODES.map((code) => ({
+  code,
+  name: BA_LABEL[code],
+}))

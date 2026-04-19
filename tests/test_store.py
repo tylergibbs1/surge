@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -12,9 +12,9 @@ from surge import store
 def _sample() -> pl.DataFrame:
     return pl.DataFrame({
         "ts_utc": [
-            datetime(2024, 1, 15, 0, tzinfo=timezone.utc),
-            datetime(2024, 1, 15, 1, tzinfo=timezone.utc),
-            datetime(2024, 2, 1, 0, tzinfo=timezone.utc),
+            datetime(2024, 1, 15, 0, tzinfo=UTC),
+            datetime(2024, 1, 15, 1, tzinfo=UTC),
+            datetime(2024, 2, 1, 0, tzinfo=UTC),
         ],
         "ba": ["PJM", "PJM", "PJM"],
         "load_mw": [80000.0, 78000.0, 81000.0],

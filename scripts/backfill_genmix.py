@@ -1,11 +1,12 @@
-"""Backfill EIA-930 hourly wind + solar generation for 7 BAs, 2018-2025."""
+"""Backfill EIA-930 hourly wind + solar generation for every demand BA, 2018-2025."""
 from __future__ import annotations
 
 import time
 
+from surge import bas as _bas
 from surge.scrapers.eia_genmix import fetch
 
-BAS = ["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"]
+BAS = _bas.demand_codes()
 FUELS = ["WND", "SUN"]
 
 

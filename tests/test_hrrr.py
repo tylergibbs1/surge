@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -10,7 +10,7 @@ from surge.scrapers import hrrr
 
 
 def test_urls_have_correct_shape() -> None:
-    dt = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    dt = datetime(2026, 1, 2, 6, tzinfo=UTC)
     assert hrrr.grib_url(dt, 3) == (
         "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/"
         "hrrr.20260102/conus/hrrr.t06z.wrfsfcf03.grib2"
@@ -54,7 +54,7 @@ def test_download_slice_issues_range_request(monkeypatch) -> None:
     monkeypatch.setattr(httpx, "Client",
                         lambda *a, **kw: real_client(*a, transport=transport, **kw))
 
-    dt = datetime(2026, 1, 2, 6, tzinfo=timezone.utc)
+    dt = datetime(2026, 1, 2, 6, tzinfo=UTC)
     blob = hrrr.download_slice(dt, 1, variable="TMP", level="2 m above ground")
     assert len(blob) == 128
     assert captured["range"] == "bytes=0-524287"

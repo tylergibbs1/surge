@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import json
 import logging
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Annotated, Any, AsyncIterator
-
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,10 +33,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from surge import __version__
+from surge import bas as _bas
 from surge.api import forecaster
 from surge.api.schemas import (
     SUPPORTED_BAS,
     BAListResponse,
+    BAMeta,
     ForecastPoint,
     ForecastResponse,
     HealthResponse,
@@ -94,10 +96,10 @@ app = FastAPI(
     title="Surge — open forecasts for the US power grid",
     version=__version__,
     description=(
-        "Open, probabilistic day-ahead load forecasts for 7 major US balancing "
-        "authorities. Model: Chronos-2 fine-tuned on 7 years of EIA-930 load, "
-        "ASOS hourly temperatures, and US calendar features. Test MASE 0.45 "
-        "across 7 BAs — beats seasonal-naive-24 by 56.6%. "
+        f"Open, probabilistic day-ahead load forecasts for {len(SUPPORTED_BAS)} "
+        "US balancing authorities (every EIA-930 BA with a demand series). "
+        "Model: Chronos-2 fine-tuned on 7 years of EIA-930 load, ASOS hourly "
+        "temperatures, and US calendar features. "
         "For research and reference use only — not for trading or bankable decisions."
     ),
     lifespan=lifespan,
@@ -145,15 +147,37 @@ def health(request: Request) -> HealthResponse:
 
 
 @app.get("/bas", response_model=BAListResponse, tags=["meta"])
-def bas() -> BAListResponse:
-    return BAListResponse(bas=list(SUPPORTED_BAS), count=len(SUPPORTED_BAS))
+def bas(include_gen_only: bool = False) -> BAListResponse:
+    """List forecastable BAs (default) or the full EIA-930 registry.
+
+    Set `include_gen_only=true` to also return the 14 generator- or
+    transmission-only BAs that have no demand series (shown on the map
+    for completeness but not forecasted).
+    """
+    codes = _bas.all_codes() if include_gen_only else _bas.demand_codes()
+    metadata = [
+        BAMeta(
+            code=b.code,
+            name=b.name,
+            interconnect=b.interconnect,
+            utc_offset=b.utc_offset,
+            station=b.station,
+            has_demand=b.has_demand,
+            is_rto=b.is_rto,
+            centroid=b.centroid,
+            peak_mw=b.peak_mw,
+        )
+        for c in codes
+        for b in (_bas.get(c),)
+    ]
+    return BAListResponse(bas=codes, count=len(codes), metadata=metadata)
 
 
 def _build_response(ba: str, horizon: int, result: dict, model_name: str) -> ForecastResponse:
     return ForecastResponse(
         ba=ba,
         model=model_name,
-        as_of_utc=datetime.now(tz=timezone.utc),
+        as_of_utc=datetime.now(tz=UTC),
         context_start_utc=result["context_start_utc"],
         context_end_utc=result["context_end_utc"],
         horizon=horizon,
@@ -164,7 +188,7 @@ def _build_response(ba: str, horizon: int, result: dict, model_name: str) -> For
 # NOTE: declare fixed paths before path-parameter routes — FastAPI matches
 # in declaration order, so `/forecast/stream` must come before `/forecast/{ba}`.
 @app.get("/forecast", response_model=list[ForecastResponse], tags=["forecast"])
-@limiter.limit("10/minute")  # 7× more work than /forecast/{ba}, so stricter
+@limiter.limit("10/minute")  # 7x more work than /forecast/{ba}, so stricter
 def forecast_all(
     pipe: PipeDep,
     request: Request,
@@ -237,10 +261,10 @@ def forecast_one(
     except ValueError:
         # Deliberately generic — the upstream error may mention paths,
         # column names, or library internals.
-        raise HTTPException(status_code=400, detail="invalid forecast request")
+        raise HTTPException(status_code=400, detail="invalid forecast request") from None
     except Exception:  # pragma: no cover
         log.exception("forecast failed for %s", ba)
-        raise HTTPException(status_code=500, detail="forecast failed")
+        raise HTTPException(status_code=500, detail="forecast failed") from None
     return _with_cache_headers(
         _build_response(ba, horizon, result, request.app.state.model_name),
         response,

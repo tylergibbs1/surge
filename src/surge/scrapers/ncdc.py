@@ -17,7 +17,7 @@ import gzip
 import io
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import polars as pl
@@ -70,7 +70,7 @@ def storm_events(year: int, *, persist: bool = True) -> pl.DataFrame:
             )
         else:
             df2 = df.with_columns(
-                pl.lit(datetime(year, 1, 1, tzinfo=timezone.utc)).alias("ts_utc")
+                pl.lit(datetime(year, 1, 1, tzinfo=UTC)).alias("ts_utc")
             )
         store.write_through(
             "storm_events", df2,

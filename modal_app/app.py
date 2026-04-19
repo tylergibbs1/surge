@@ -14,7 +14,7 @@ Configure the playground to call it by setting in
 
 Cost sketch (as of 2026):
     CPU cold start: ~4 s to import torch, another ~10 s to download
-        surge-fm-v2 from HF on first call; subsequent requests in the same
+        surge-fm-v3 from HF on first call; subsequent requests in the same
         warm window (300 s idle): ~300 ms.
     Free $30/mo credit covers ~2.5 M CPU-seconds which is way more than
         Surge's expected traffic.
@@ -26,7 +26,9 @@ from pathlib import Path
 import modal
 
 APP_NAME = "surge-api"
-HF_MODEL_ID = "Tylerbry1/surge-fm-v2"
+# 53-BA generalist. Override with SURGE_MODEL_PATH=Tylerbry1/surge-fm-v2
+# in the container env to serve the older 7-RTO specialist.
+HF_MODEL_ID = "Tylerbry1/surge-fm-v3"
 ROOT = Path(__file__).resolve().parents[1]
 
 # Image:

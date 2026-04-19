@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import gzip
 import json
 
 import httpx
 
 from surge.scrapers import ncdc
-
 
 INDEX_HTML = """
 <html><body>
@@ -38,7 +36,7 @@ def test_storm_events_index_parses_and_sorts(monkeypatch) -> None:
 
 def test_ghcnd_paginates_and_shapes_frame(monkeypatch) -> None:
     monkeypatch.setenv("NCDC_TOKEN", "fake")
-    monkeypatch.setenv("SURGE_DATA_DIR", str(monkeypatch.undo))  # noqa — just avoid writes
+    monkeypatch.setenv("SURGE_DATA_DIR", str(monkeypatch.undo))
 
     calls = {"n": 0}
 

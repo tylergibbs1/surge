@@ -22,6 +22,7 @@ import torch
 from chronos import BaseChronosPipeline
 from experiments.features import load_multi_ba
 from experiments.eval_c2 import rolling_eval_c2
+from surge import bas as _bas
 
 
 def main() -> None:
@@ -29,7 +30,7 @@ def main() -> None:
     cfg = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
 
     base = cfg.get("base", "amazon/chronos-2")
-    bas_list = cfg.get("bas", ["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"])
+    bas_list = cfg.get("bas", _bas.demand_codes())
     context = cfg.get("context", 2048)
     horizon = cfg.get("horizon", 24)
     on = cfg.get("on", "val")

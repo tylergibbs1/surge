@@ -24,9 +24,9 @@ For byte-range fetches and idx parsing alone, only `httpx` is needed.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
-from typing import Iterable
+from datetime import UTC, datetime, time, timedelta
 
 import httpx
 
@@ -141,7 +141,7 @@ def list_runs(date: datetime) -> list[datetime]:
     HRRR runs every hour; we optimistically enumerate 00z..23z and rely on
     the caller to skip missing runs.
     """
-    return [datetime.combine(date.date(), time(h), tzinfo=timezone.utc) for h in range(24)]
+    return [datetime.combine(date.date(), time(h), tzinfo=UTC) for h in range(24)]
 
 
 def iter_forecasts(
@@ -164,7 +164,6 @@ def parse_grib(blob: bytes):  # pragma: no cover — lazy import
     """Decode a GRIB2 byte blob to an xarray DataArray. Requires `cfgrib`."""
     import tempfile
 
-    import cfgrib  # type: ignore[import-not-found]
     import xarray as xr  # type: ignore[import-not-found]
 
     with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as fh:

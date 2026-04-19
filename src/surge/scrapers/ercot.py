@@ -22,9 +22,10 @@ from __future__ import annotations
 
 import io
 import zipfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 
 import httpx
 import polars as pl

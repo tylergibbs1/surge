@@ -11,7 +11,7 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
 const DESCRIPTION =
-  "Open probabilistic day-ahead load forecasts for 7 US balancing authorities. Chronos-2 fine-tuned on 7 years of public data. Test MASE 0.45 — matches utility-internal accuracy, free and open-source."
+  "Open probabilistic day-ahead load forecasts for every US balancing authority that publishes a demand series to EIA-930 (53 total). Chronos-2 fine-tuned on 7 years of public data — matches utility-internal accuracy, free and open-source."
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://surge-omega-nine.vercel.app"),
@@ -25,7 +25,10 @@ export const metadata: Metadata = {
   keywords: [
     "electricity grid", "load forecasting", "Chronos-2", "open source",
     "PJM", "CAISO", "ERCOT", "MISO", "NYISO", "ISO-NE", "SPP",
+    "Southern Company", "TVA", "Duke Energy", "Florida Power & Light",
+    "Bonneville Power", "PacifiCorp", "Xcel", "Arizona Public Service",
     "day-ahead forecast", "probabilistic", "energy", "balancing authority",
+    "EIA-930",
   ],
   category: "science",
   openGraph: {

@@ -22,6 +22,9 @@ htmlcov/
 *.swp
 .DS_Store
 
+# Claude Code workspace (agent memory, skills, local artefacts)
+.claude/
+
 # Surge cache / data
 .surge_cache/
 data/

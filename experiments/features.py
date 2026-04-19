@@ -37,7 +37,12 @@ def _ffill_np(x: np.ndarray) -> np.ndarray:
             last = out[i]
     mask = np.isnan(out)
     if mask.any():
-        out[mask] = out[~mask][0]
+        # Backfill leading NaNs with the first real value; if the array is
+        # entirely NaN (e.g. a BA with no weather data yet), fall back to 0
+        # so training doesn't crash — the model treats it as a flat covariate
+        # with no signal.
+        real = out[~mask]
+        out[mask] = real[0] if real.size else 0.0
     return out
 
 
