@@ -15,8 +15,10 @@ jobs:
       # GitHub's shared runner IPs are shared with other tenants, and Iowa
       # Mesonet rate-limits aggressively on shared egress. Weather is
       # therefore best-effort; load (EIA-930) is required.
+      # Note: `runner.temp` isn't resolvable at job-level env; use the
+      # $RUNNER_TEMP env var that GitHub-hosted runners always set.
       EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
-      SURGE_DATA_DIR: ${{ runner.temp }}/surge-data
+      SURGE_DATA_DIR: ${{ github.workspace }}/surge-data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,5 +46,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surge-data
-          path: ${{ runner.temp }}/surge-data
+          path: ${{ github.workspace }}/surge-data
           retention-days: 14
