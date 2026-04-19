@@ -2,10 +2,14 @@
 
 **Open, probabilistic day-ahead load forecasts for the US power grid.**
 
-A fine-tuned Chronos-2 foundation model + FastAPI service covering every US
-balancing authority that publishes a demand series to EIA-930 — 53 BAs
-spanning the Eastern, Western, and Texas interconnections. Public data
-only, one-command deploy, permissive license.
+A fine-tuned Chronos-2 foundation model + FastAPI service + hosted
+playground covering every US balancing authority that publishes a demand
+series to EIA-930 — 53 BAs spanning the Eastern, Western, and Texas
+interconnections. Public data only, one-command deploy, permissive license.
+
+- **Live demo** — [surgeforecast.com](https://surgeforecast.com)
+- **Code** — [github.com/tylergibbs1/surge](https://github.com/tylergibbs1/surge)
+- **Model** — [huggingface.co/Tylerbry1/surge-fm-v3](https://huggingface.co/Tylerbry1/surge-fm-v3)
 
 ![Day-ahead forecast vs. reality for US grids](docs/plots/hero_forecast.png)
 
@@ -29,6 +33,27 @@ interval, solid = actual.*
   0.49** on 2025 hold-out. Still available via `SURGE_MODEL_PATH` for
   users who want the narrower-but-sharper 7-BA variant.
 - `surge.api` — FastAPI inference service with NDJSON streaming and OpenAPI docs.
+- `web/playground` — Next.js playground at **surgeforecast.com**. Four
+  coordinated views over the same data:
+    * **Map** — MapLibre US choropleth, colour-coded by interconnect,
+      pins sized by current load. Click any BA to drill into its chart.
+    * **Grid** (`/grid`) — 53 BA cards sortable by % of all-time peak,
+      peak GW, or name. Filters for interconnection (Eastern/Western/
+      Texas) and size tier (RTO / major utility / small). Each card
+      shows a 24 h sparkline and a traffic-light status dot.
+    * **Live hero** — [Liveline](https://github.com/benjitaylor/liveline)
+      canvas chart of rolling 24 h US aggregate demand (~165 GW
+      overnight, ~240 GW on a summer afternoon), polling
+      `/api/live-load` every 60 s with a visibility-gated interval and
+      keep-last-good fallback on transient 502s.
+    * **Now indicator** on each BA's forecast chart — a dashed vertical
+      line + pulsing SVG dot at the current hour, sliding rightward
+      through the 24 h window once a minute.
+- Daily "bake" — `/api/bake` regenerates the full forecast set at
+  06:15 UTC and writes `forecasts/{BA}.json` + `forecasts/all.json`
+  to Vercel Blob. The read-side tries the blob first (~300 ms edge-
+  cached) and falls through to live Modal inference on miss or
+  `?force=1` (~3 s cold).
 
 ## Quick start
 
@@ -118,8 +143,10 @@ HRRR/GFS weather as future covariates.
 
 ## Status
 
-Pre-release. API works locally, model checkpoints published separately via
-Hugging Face Hub. See [roadmap](#roadmap).
+Pre-release, hosted demo live. The API runs locally from a one-line
+`uvicorn`, the 53-BA checkpoint auto-downloads from Hugging Face on
+first request, and the playground at [surgeforecast.com](https://surgeforecast.com)
+is open to anyone. See [roadmap](#roadmap) for what's next.
 
 ## License
 
@@ -136,12 +163,13 @@ specific 2025 hold-out and may not generalise to future extreme events.
 - [x] Phase 0: scaffold, data library (7 BAs load + weather), parquet store
 - [x] Phase 1: Chronos-2 fine-tune, benchmark vs classical + FM baselines
 - [x] Phase 1: FastAPI inference service
-- [x] Phase 2 (this release): all EIA-930 BAs (53 demand-reporting, 67 total
-      registered), surge-fm-v3 checkpoint, BA registry in `surge.bas`,
-      dynamic `/bas` metadata endpoint, playground map extended to every
-      BA footprint
+- [x] Phase 2: all EIA-930 BAs (53 demand-reporting, 67 total registered),
+      surge-fm-v3 checkpoint, BA registry in `surge.bas`, dynamic `/bas`
+      metadata endpoint, playground map extended to every BA footprint
+- [x] Phase 2: always-on hosted demo at [surgeforecast.com](https://surgeforecast.com)
+      with map + grid + live US-demand hero + now-indicator, daily bake
+      to Vercel Blob, Modal fallback for on-demand inference
 - [ ] Phase 2: ASOS backfill for the 46 new BAs (Iowa Mesonet rate-limit
-      cleanup — currently zero-filled), LMP forecasting task, Hugging Face
-      dataset release
-- [ ] Phase 2: always-on hosted demo
+      cleanup — currently zero-filled) and retrain as surge-fm-v4
+- [ ] Phase 2: LMP forecasting task, Hugging Face dataset release
 - [ ] Phase 3: scenario simulator (surge-sim)
