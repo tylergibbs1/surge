@@ -29,11 +29,19 @@ async function fetchSnapshot(): Promise<Point[]> {
   if (!r.ok) throw new Error(`live-load ${r.status}`)
   const payload = (await r.json()) as ApiPayload
   return payload.points.map((p) => ({
-    time: Date.parse(p.ts_utc),
+    // Liveline times are epoch seconds (it divides Date.now() by 1000
+    // internally and compares against point.time). Passing ms puts every
+    // point 1000× in the future — outside the `window` and invisible.
+    time: Date.parse(p.ts_utc) / 1000,
     // GW reads cleaner than MW in the value overlay: ~180 vs 180_000.
     value: p.total_mw / 1000,
   }))
 }
+
+// 24 h rolling window in seconds. Liveline defaults to 30 s, which is
+// right for tick-by-tick market feeds but completely wrong for our
+// hourly grid data — we'd show only the latest point (or nothing).
+const WINDOW_SECS = 24 * 60 * 60
 
 function formatValue(v: number): string {
   return `${v.toFixed(1)} GW`
@@ -100,6 +108,7 @@ export function UsDemandHero() {
           }
           theme="dark"
           color="#5CC8A2"
+          window={WINDOW_SECS}
           fill
           grid
           badge={false}
