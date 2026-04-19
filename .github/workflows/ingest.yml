@@ -4,6 +4,9 @@ on:
     - cron: "15 * * * *"  # every hour at :15
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   refresh:
     runs-on: ubuntu-latest

@@ -25,6 +25,12 @@ MODEL_PATH = os.environ.get(
     "SURGE_MODEL_PATH",
     str(_LOCAL_FALLBACK) if _LOCAL_FALLBACK.exists() else _DEFAULT_HF,
 )
+# Pin a specific commit SHA when loading from the HF hub. Defends against
+# upstream-repo takeover (the loader would otherwise pull `main` which is
+# mutable). Override via env when publishing a new checkpoint.
+MODEL_REVISION = os.environ.get(
+    "SURGE_MODEL_REVISION", "f4a6b9ebebb73dbe4138736a76442c8bbe2430ae"
+)
 MODEL_NAME = "surge-fm-v2"
 CONTEXT_LENGTH = 2048
 

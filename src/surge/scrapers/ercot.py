@@ -127,15 +127,37 @@ def download_zip(doc: ErcotDoc, client_: httpx.Client | None = None) -> bytes:
             c.close()
 
 
+# Zip-bomb defences. ERCOT payloads are typically <1 MB zipped / <10 MB
+# decompressed; these caps are well above that but way below anything
+# pathological.
+_MAX_ZIP_MEMBERS = 64
+_MAX_ZIP_DECOMPRESSED = 256 * 1024 * 1024   # 256 MB
+
+
 def read_zip_as_frames(blob: bytes) -> dict[str, pl.DataFrame]:
-    """Unpack a zip of CSVs into {member_name: DataFrame}."""
+    """Unpack a zip of CSVs into {member_name: DataFrame}.
+
+    Rejects archives that have too many members, absolute/traversal paths,
+    or a decompressed size over the cap (zip-bomb protection).
+    """
     out: dict[str, pl.DataFrame] = {}
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        for name in zf.namelist():
+        members = zf.namelist()
+        if len(members) > _MAX_ZIP_MEMBERS:
+            raise ValueError(f"zip has {len(members)} members (cap {_MAX_ZIP_MEMBERS})")
+        total = 0
+        for name in members:
+            # Reject traversal / absolute members.
+            if name.startswith("/") or ".." in name.replace("\\", "/").split("/"):
+                raise ValueError(f"unsafe zip member name: {name!r}")
             if not name.lower().endswith(".csv"):
                 continue
+            info = zf.getinfo(name)
+            total += info.file_size
+            if total > _MAX_ZIP_DECOMPRESSED:
+                raise ValueError("zip decompressed size exceeds cap")
             with zf.open(name) as fh:
-                out[name] = pl.read_csv(fh.read())
+                out[name] = pl.read_csv(fh.read(_MAX_ZIP_DECOMPRESSED))
     return out
 
 

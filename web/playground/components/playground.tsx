@@ -80,12 +80,18 @@ export function Playground({
 
   const stats = useMemo(() => {
     if (!data) return null
-    const peak = Math.max(...data.points.map((p) => p.median_mw))
-    const peakPt = data.points.find((p) => p.median_mw === peak)!
-    const mean = data.points.reduce((s, p) => s + p.median_mw, 0) / data.points.length
+    // Single-pass peak + mean. Avoids Math.max(...map(...)) double traversal
+    // and the spread-into-stack cost on long horizons.
+    let peak = -Infinity
+    let peakPt = data.points[0]
+    let sum = 0
+    for (const p of data.points) {
+      sum += p.median_mw
+      if (p.median_mw > peak) { peak = p.median_mw; peakPt = p }
+    }
+    const mean = sum / data.points.length
     const first = data.points[0]
-    const piPct =
-      ((first.p90_mw - first.p10_mw) / first.median_mw) * 100
+    const piPct = ((first.p90_mw - first.p10_mw) / first.median_mw) * 100
     return { peak, peakPt, mean, piPct }
   }, [data])
 

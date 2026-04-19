@@ -40,11 +40,12 @@ image = (
     .pip_install(
         "fastapi[standard]>=0.115",
         "uvicorn>=0.30",
+        "slowapi>=0.1.9",
         "chronos-forecasting",
-        "torch>=2.4",
+        "torch>=2.6",        # weights_only=True default; blocks pickle-RCE
         "holidays>=0.55",
-        "polars>=1.0",
-        "pyarrow>=16.0",
+        "polars>=1.15",
+        "pyarrow>=17.0",
         "httpx>=0.27",
         "tenacity>=9.0",
         "platformdirs>=4.0",

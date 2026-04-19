@@ -37,6 +37,11 @@ models/
 *.pt
 *.ckpt
 
+# Modal/Vercel deploy artefacts + compact data snapshot (regenerate via
+# scripts/rebuild_data_snapshot.py)
+data_snapshot/
+.vercel/
+
 # Local logs
 run.log
 experiments/results.tsv

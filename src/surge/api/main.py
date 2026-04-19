@@ -23,9 +23,14 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Annotated, Any, AsyncIterator
 
+import os
+
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from surge import __version__
 from surge.api import forecaster
@@ -51,9 +56,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     log.info("loading %s on %s / %s", forecaster.MODEL_PATH, device, dtype)
-    pipe = BaseChronosPipeline.from_pretrained(
-        forecaster.MODEL_PATH, device_map=device, torch_dtype=dtype,
-    )
+    # When MODEL_PATH is an HF repo id (not a local path) we also pin a
+    # specific revision — see forecaster.MODEL_REVISION for rationale.
+    load_kwargs: dict = {"device_map": device, "torch_dtype": dtype}
+    if "/" in forecaster.MODEL_PATH and not forecaster.MODEL_PATH.startswith("/"):
+        load_kwargs["revision"] = forecaster.MODEL_REVISION
+    pipe = BaseChronosPipeline.from_pretrained(forecaster.MODEL_PATH, **load_kwargs)
     app.state.pipe = pipe
     app.state.model_name = forecaster.MODEL_NAME
     app.state.device = device
@@ -64,6 +72,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.pipe = None
         log.info("model released")
 
+
+_CORS_ORIGINS_ENV = os.environ.get("SURGE_ALLOWED_ORIGINS", "")
+_DEFAULT_ORIGINS = [
+    "https://surge-omega-nine.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+]
+ALLOWED_ORIGINS = (
+    [o.strip() for o in _CORS_ORIGINS_ENV.split(",") if o.strip()]
+    if _CORS_ORIGINS_ENV
+    else _DEFAULT_ORIGINS
+)
+
+# Per-IP rate limit. slowapi uses the X-Forwarded-For header when present,
+# which Vercel sets; direct-to-Modal calls fall back to the socket peer.
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
 
 app = FastAPI(
     title="Surge — open forecasts for the US power grid",
@@ -77,9 +102,11 @@ app = FastAPI(
     ),
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -137,6 +164,7 @@ def _build_response(ba: str, horizon: int, result: dict, model_name: str) -> For
 # NOTE: declare fixed paths before path-parameter routes — FastAPI matches
 # in declaration order, so `/forecast/stream` must come before `/forecast/{ba}`.
 @app.get("/forecast", response_model=list[ForecastResponse], tags=["forecast"])
+@limiter.limit("10/minute")  # 7× more work than /forecast/{ba}, so stricter
 def forecast_all(
     pipe: PipeDep,
     request: Request,
@@ -153,6 +181,7 @@ def forecast_all(
 
 
 @app.get("/forecast/stream", tags=["forecast"])
+@limiter.limit("10/minute")
 def forecast_stream(
     pipe: PipeDep,
     request: Request,
@@ -186,6 +215,7 @@ def _with_cache_headers(r: ForecastResponse, response) -> ForecastResponse:
 
 
 @app.get("/forecast/{ba}", response_model=ForecastResponse, tags=["forecast"])
+@limiter.limit("60/minute")
 def forecast_one(
     ba: str,
     pipe: PipeDep,
@@ -204,11 +234,13 @@ def forecast_one(
 
     try:
         result = forecaster.forecast_ba(pipe, ba, horizon=horizon)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:  # pragma: no cover
+    except ValueError:
+        # Deliberately generic — the upstream error may mention paths,
+        # column names, or library internals.
+        raise HTTPException(status_code=400, detail="invalid forecast request")
+    except Exception:  # pragma: no cover
         log.exception("forecast failed for %s", ba)
-        raise HTTPException(status_code=500, detail=f"forecast failed: {e}") from e
+        raise HTTPException(status_code=500, detail="forecast failed")
     return _with_cache_headers(
         _build_response(ba, horizon, result, request.app.state.model_name),
         response,

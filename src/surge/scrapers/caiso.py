@@ -111,18 +111,35 @@ def fetch(
     return frames
 
 
+# Zip-bomb defences (match ERCOT scraper).
+_MAX_ZIP_MEMBERS = 64
+_MAX_ZIP_DECOMPRESSED = 256 * 1024 * 1024  # 256 MB
+
+
 def _unzip(blob: bytes) -> list[pl.DataFrame]:
-    """Extract every CSV member from an OASIS response zip."""
+    """Extract every CSV member from an OASIS response zip.
+
+    Rejects archives that exceed safe caps or contain traversal member
+    names.
+    """
     out: list[pl.DataFrame] = []
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        for name in zf.namelist():
+        members = zf.namelist()
+        if len(members) > _MAX_ZIP_MEMBERS:
+            raise ValueError(f"zip has {len(members)} members (cap {_MAX_ZIP_MEMBERS})")
+        total = 0
+        for name in members:
+            if name.startswith("/") or ".." in name.replace("\\", "/").split("/"):
+                raise ValueError(f"unsafe zip member name: {name!r}")
             if not name.lower().endswith(".csv"):
                 continue
+            total += zf.getinfo(name).file_size
+            if total > _MAX_ZIP_DECOMPRESSED:
+                raise ValueError("zip decompressed size exceeds cap")
             with zf.open(name) as fh:
-                data = fh.read()
-                if not data.strip():
-                    continue
-                out.append(pl.read_csv(data))
+                data = fh.read(_MAX_ZIP_DECOMPRESSED)
+                if data.strip():
+                    out.append(pl.read_csv(data))
     return out
 
 

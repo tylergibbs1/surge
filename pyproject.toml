@@ -43,8 +43,13 @@ cli = ["typer>=0.12", "rich>=13.7"]
 api = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
+    "slowapi>=0.1.9",
     "chronos-forecasting",
-    "torch>=2.4",
+    # torch>=2.6: below this version torch.load defaults to
+    # weights_only=False, which permits arbitrary code execution when
+    # loading a pickled checkpoint. Some chronos variants ship pickled
+    # files; pinning >=2.6 forces the safe default.
+    "torch>=2.6",
     "holidays>=0.55",
 ]
 all = ["surge[dev,weather,cli,api]"]

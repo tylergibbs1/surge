@@ -14,7 +14,7 @@ const DESCRIPTION =
   "Open probabilistic day-ahead load forecasts for 7 US balancing authorities. Chronos-2 fine-tuned on 7 years of public data. Test MASE 0.45 — matches utility-internal accuracy, free and open-source."
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://surge-grid.vercel.app"),
+  metadataBase: new URL("https://surge-omega-nine.vercel.app"),
   title: {
     default: "Surge — open forecasts for the US power grid",
     template: "%s · Surge",

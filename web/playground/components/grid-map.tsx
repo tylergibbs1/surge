@@ -21,8 +21,10 @@ import {
 } from "@/lib/us-grid-geo"
 import type { ForecastResponse } from "@/lib/types"
 
-const STATES_GEOJSON_URL =
-  "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
+// Vendored locally under /public — removes runtime dependency on a
+// third-party GitHub repo that could be deleted, rate-limited, or taken
+// over. Same Public Domain source (PublicaMundi/MappingAPI).
+const STATES_GEOJSON_URL = "/data/us-states.json"
 
 // US-state full-name → 2-letter code, needed because the GeoJSON above
 // carries `properties.name` as the long form ("New York", not "NY").
@@ -170,12 +172,15 @@ function GridPolygons({
 }
 
 function peakInfo(fc?: ForecastResponse) {
-  if (!fc) return null
-  let maxP = 0, maxIdx = 0
-  fc.points.forEach((p, i) => {
-    if (p.median_mw > maxP) { maxP = p.median_mw; maxIdx = i }
-  })
-  return { peakGW: maxP / 1000, peakTs: fc.points[maxIdx]?.ts_utc ?? "" }
+  if (!fc || fc.points.length === 0) return null
+  // Single-pass; no intermediate allocations.
+  let maxP = -Infinity
+  let maxTs = ""
+  for (let i = 0; i < fc.points.length; i++) {
+    const p = fc.points[i]
+    if (p.median_mw > maxP) { maxP = p.median_mw; maxTs = p.ts_utc }
+  }
+  return { peakGW: maxP / 1000, peakTs: maxTs }
 }
 
 export function GridMap({ horizon = 24, selected, onSelect }: Props) {
@@ -231,12 +236,12 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
                   className="group/pin relative flex items-center justify-center rounded-full transition-transform duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 active:scale-95"
                   style={{ width: sizePx, height: sizePx }}
                 >
-                  {selected === ba && (
+                  {selected === ba ? (
                     <span
                       className="absolute inset-0 animate-ping rounded-full opacity-75"
                       style={{ background: BA_FILL_COLOR[ba] }}
                     />
-                  )}
+                  ) : null}
                   <span
                     className="relative block rounded-full border-2 border-white/90 shadow-lg"
                     style={{
