@@ -187,17 +187,19 @@ export function Playground({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-muted-foreground text-xs font-medium uppercase tabular-nums">
+          <div className="space-y-3 pt-1">
+            <label className="text-muted-foreground block text-xs font-medium uppercase tracking-wider tabular-nums">
               Forecast horizon — {horizon} hours ({(horizon / 24).toFixed(1)} days)
             </label>
-            <Slider
-              min={1}
-              max={168}
-              step={1}
-              value={[horizon]}
-              onValueChange={(v) => onHorizonChange(v[0])}
-            />
+            <div className="pt-1">
+              <Slider
+                min={1}
+                max={168}
+                step={1}
+                value={[horizon]}
+                onValueChange={(v) => onHorizonChange(v[0])}
+              />
+            </div>
           </div>
         </div>
 
