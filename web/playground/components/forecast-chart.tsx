@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Area,
   CartesianGrid,
@@ -249,23 +249,35 @@ export function ForecastChart({
   )
 
   const nowMs = useNowTick()
-  const { rows, forecastStartMs, lastActualMs } = buildRows(forecast, actuals, ba)
-  const tempRows = buildTempRows(forecast)
+
+  // All heavy derivations live in useMemo so the 60-second now-tick just
+  // moves the ReferenceLine — it doesn't rebuild the 200+ row dataset,
+  // re-scan for peak, or recompute night bands.
+  const { rows, forecastStartMs, lastActualMs } = useMemo(
+    () => buildRows(forecast, actuals, ba),
+    [forecast, actuals, ba],
+  )
+  const tempRows = useMemo(() => buildTempRows(forecast), [forecast])
+  const peakRow = useMemo<Row | null>(() => {
+    let best: Row | null = null
+    for (const r of rows) {
+      if (r.median === undefined) continue
+      if (!best || (best.median !== undefined && r.median > best.median)) {
+        best = r
+      }
+    }
+    return best
+  }, [rows])
+  const bands = useMemo(() => nightBands(rows), [rows])
+  const xDomain = useMemo<[number, number]>(
+    () =>
+      rows.length > 0
+        ? [rows[0].ts_ms, rows[rows.length - 1].ts_ms]
+        : [0, 1],
+    [rows],
+  )
 
   if (rows.length === 0) return null
-
-  // Peak over the forecast window only — the chart's main message is
-  // "where is tomorrow's peak," not "when did the past peak."
-  let peakRow: Row | null = null
-  for (const r of rows) {
-    if (r.median === undefined) continue
-    if (!peakRow || (peakRow.median !== undefined && r.median > peakRow.median)) {
-      peakRow = r
-    }
-  }
-
-  const bands = nightBands(rows)
-  const xDomain: [number, number] = [rows[0].ts_ms, rows[rows.length - 1].ts_ms]
 
   // Only surface the "now" marker when it falls inside the rendered
   // window — otherwise it'd be stuck against the axis edge.

@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
-import { SpeedInsights } from "@vercel/speed-insights/next"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ThirdPartyAnalytics } from "@/components/third-party-analytics"
 import { cn } from "@/lib/utils"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
@@ -66,8 +65,7 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>{children}</ThemeProvider>
-        <Analytics />
-        <SpeedInsights />
+        <ThirdPartyAnalytics />
       </body>
     </html>
   )
