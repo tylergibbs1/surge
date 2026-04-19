@@ -165,6 +165,12 @@ export function UsDemandHero() {
           valueMomentumColor
           momentum
           formatValue={formatValue}
+          // Explicit padding override — Liveline's default right=12 (with
+          // badge=false) puts the live dot and momentum arrows right up
+          // against the canvas edge. 40 px gives them room to breathe
+          // and keeps the grid labels ("200.0") from kissing the card
+          // border. Left matches for visual symmetry.
+          padding={{ top: 12, right: 40, bottom: 28, left: 16 }}
           // Matches Liveline's default but makes the intent explicit: the
           // line breathes toward the new value at 8% per frame, tying
           // every discrete hourly update to the 60-fps render loop.
