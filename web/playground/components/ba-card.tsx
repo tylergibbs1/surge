@@ -124,7 +124,10 @@ export function BaCard({
               style={{ background: accentHex }}
               aria-hidden="true"
             />
-            <span className="truncate font-mono text-sm font-semibold tracking-wide">
+            <span
+              translate="no"
+              className="truncate font-mono text-sm font-semibold tracking-wide"
+            >
               {ba}
             </span>
             {isRto ? (

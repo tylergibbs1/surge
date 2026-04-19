@@ -770,7 +770,10 @@ function ControlButton({
       aria-label={label}
       type="button"
       className={cn(
-        "flex size-8 items-center justify-center transition-all",
+        // Explicit transition list — only bg + ring change on hover/focus,
+        // so transitioning `all` was animating layout-inert properties
+        // (color, border, etc.) for no gain and risked surprise frames.
+        "flex size-8 items-center justify-center transition-[background-color,box-shadow] duration-150",
         "first:rounded-t-md last:rounded-b-md",
         "hover:bg-accent dark:hover:bg-accent/40",
         "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-inset",

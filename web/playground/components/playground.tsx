@@ -132,7 +132,7 @@ export function Playground({
         <CardTitle>{title}</CardTitle>
         <CardDescription>
           Hourly probabilistic load forecast · GW · EIA-930 demand series ·
-          model <span className="font-mono">{data?.model ?? "—"}</span>
+          model <span className="font-mono" translate="no">{data?.model ?? "—"}</span>
           {data ? (
             <>
               {" "}
@@ -192,7 +192,7 @@ export function Playground({
               <SelectContent>
                 {BAS.map((b) => (
                   <SelectItem key={b.code} value={b.code}>
-                    <span className="font-mono">{b.code}</span>
+                    <span className="font-mono" translate="no">{b.code}</span>
                     <span className="text-muted-foreground ml-2 text-xs">
                       {b.name}
                     </span>
@@ -230,7 +230,7 @@ export function Playground({
                 {new Date(data.points[0]?.ts_utc).toISOString().slice(0, 16)}Z
               </span>{" "}
               · {horizon} hourly steps · model{" "}
-              <span className="font-mono">{data.model}</span>
+              <span className="font-mono" translate="no">{data.model}</span>
             </>
           ) : error ? null : (
             "Loading forecast…"

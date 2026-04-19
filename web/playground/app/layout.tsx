@@ -64,6 +64,16 @@ export default function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", geist.variable)}
     >
       <body>
+        {/* Keyboard/AT users bypass the glossary + nav pills and land on
+            the first interactive region of the page. `sr-only` hides it
+            visually; `focus:not-sr-only` brings it back on Tab.
+            `z-[60]` clears the radix portals (z-50) used by selects. */}
+        <a
+          href="#main"
+          className="sr-only bg-background text-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:ring-2 focus:ring-foreground/60"
+        >
+          Skip to content
+        </a>
         <ThemeProvider>{children}</ThemeProvider>
         <ThirdPartyAnalytics />
       </body>

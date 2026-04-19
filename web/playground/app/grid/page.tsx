@@ -84,23 +84,25 @@ export default async function GridPage() {
           </nav>
         </header>
 
-        {data ? (
-          <BaGrid forecasts={data.forecasts} bakedAt={data.baked_at} />
-        ) : (
-          <div className="rounded-xl border border-dashed border-foreground/15 p-10 text-center">
-            <p className="text-sm text-muted-foreground">
-              Baked forecasts aren&apos;t available yet. The daily bake at
-              06:15 UTC populates this view — until it runs, or if the Blob
-              store isn&apos;t linked, the grid stays empty.
-            </p>
-            <Link
-              href="/"
-              className="mt-4 inline-block text-sm font-medium underline-offset-4 hover:underline"
-            >
-              → use the live map instead
-            </Link>
-          </div>
-        )}
+        <main id="main">
+          {data ? (
+            <BaGrid forecasts={data.forecasts} bakedAt={data.baked_at} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-foreground/15 p-10 text-center">
+              <p className="text-sm text-muted-foreground">
+                Baked forecasts aren&apos;t available yet. The daily bake at
+                06:15 UTC populates this view — until it runs, or if the Blob
+                store isn&apos;t linked, the grid stays empty.
+              </p>
+              <Link
+                href="/"
+                className="mt-4 inline-block text-sm font-medium underline-offset-4 hover:underline"
+              >
+                → use the live map instead
+              </Link>
+            </div>
+          )}
+        </main>
 
         <Glossary />
 

@@ -48,6 +48,11 @@
 }
 
 :root {
+    /* Tell the browser our themes so native scrollbars, form controls,
+       and autofill backgrounds adapt. Without this, Windows dark mode
+       gets a light-scheme scrollbar on the same page. `.dark` below
+       overrides to `dark` when next-themes toggles the class. */
+    color-scheme: light;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -85,6 +90,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
@@ -128,6 +134,16 @@
     /* Crisper text on macOS; harmless on other platforms. */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    }
+  /* Kill iOS's 300 ms tap-delay + double-tap-to-zoom on every control.
+     `manipulation` still allows pan + pinch-zoom at the page level — it
+     just disables the gesture-ambiguity wait on individual targets. The
+     Button component also carries this, but this base rule covers the
+     hand-rolled buttons in ba-grid, the map, and the EIA toggle chip. */
+  button,
+  [role="button"],
+  a[href] {
+    touch-action: manipulation;
     }
   html {
     @apply font-sans;

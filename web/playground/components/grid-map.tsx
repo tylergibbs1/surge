@@ -330,7 +330,10 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
                       boxShadow: `0 2px 8px -2px ${BA_FILL_COLOR[ba]}66`,
                     }}
                   />
-                  <span className="pointer-events-none absolute top-full mt-1 font-mono text-[10px] font-semibold tracking-wide whitespace-nowrap text-white mix-blend-difference">
+                  <span
+                    translate="no"
+                    className="pointer-events-none absolute top-full mt-1 font-mono text-[10px] font-semibold tracking-wide whitespace-nowrap text-white mix-blend-difference"
+                  >
                     {ba}
                   </span>
                 </button>

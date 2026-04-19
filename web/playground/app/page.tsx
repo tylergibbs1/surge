@@ -45,12 +45,16 @@ export default function Page() {
 
         <UsDemandHero />
 
-        {/* useSearchParams() inside PlaygroundApp forces client-side URL
-            reading; wrap in Suspense so the page can still statically
-            prerender its shell. */}
-        <Suspense fallback={null}>
-          <PlaygroundApp />
-        </Suspense>
+        {/* `id="main"` is the target for the root-layout skip link — put it
+            on the first region the reader actually wants to reach. */}
+        <main id="main">
+          {/* useSearchParams() inside PlaygroundApp forces client-side URL
+              reading; wrap in Suspense so the page can still statically
+              prerender its shell. */}
+          <Suspense fallback={null}>
+            <PlaygroundApp />
+          </Suspense>
+        </main>
 
         <Glossary />
 
