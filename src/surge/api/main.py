@@ -34,11 +34,12 @@ from slowapi.util import get_remote_address
 
 from surge import __version__
 from surge import bas as _bas
-from surge.api import forecaster
+from surge.api import forecaster, live_load
 from surge.api.schemas import (
     SUPPORTED_BAS,
     BAListResponse,
     BAMeta,
+    CurrentLoadResponse,
     ForecastPoint,
     ForecastResponse,
     HealthResponse,
@@ -144,6 +145,27 @@ def health(request: Request) -> HealthResponse:
         model_name=getattr(request.app.state, "model_name", None) if pipe else None,
         data_end_utc=forecaster.data_end_utc(),
     )
+
+
+@app.get("/current-load", response_model=CurrentLoadResponse, tags=["meta"])
+@limiter.limit("60/minute")
+def current_load(
+    request: Request,
+    hours: int = 24,
+) -> CurrentLoadResponse:
+    """Rolling aggregate US demand for the last `hours` hours.
+
+    Sums `load_hourly` across every BA that's reported for each hour.
+    Not a forecast — this is the actuals series the playground's live
+    hero widget polls to feel tied to the real grid.
+    """
+    if hours < 1 or hours > 168:
+        raise HTTPException(status_code=422, detail="hours must be in 1..168")
+    try:
+        payload = live_load.aggregate_load(hours=hours)
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="no load data available") from None
+    return CurrentLoadResponse(**payload)
 
 
 @app.get("/bas", response_model=BAListResponse, tags=["meta"])

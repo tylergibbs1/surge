@@ -17,6 +17,7 @@
     "@vercel/speed-insights": "^2.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "liveline": "^0.0.7",
     "lucide-react": "^1.8.0",
     "maplibre-gl": "^5.23.0",
     "next": "16.1.7",

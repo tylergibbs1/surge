@@ -7,6 +7,7 @@ import { Suspense } from "react"
 
 import { Glossary } from "@/components/glossary"
 import { PlaygroundApp } from "@/components/playground-app"
+import { UsDemandHero } from "@/components/us-demand-hero"
 
 export default function Page() {
   return (
@@ -41,6 +42,8 @@ export default function Page() {
             </Link>
           </nav>
         </header>
+
+        <UsDemandHero />
 
         {/* useSearchParams() inside PlaygroundApp forces client-side URL
             reading; wrap in Suspense so the page can still statically

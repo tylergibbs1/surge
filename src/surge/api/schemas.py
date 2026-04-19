@@ -62,3 +62,17 @@ class HealthResponse(BaseModel):
     model_loaded: bool
     model_name: str | None
     data_end_utc: datetime | None
+
+
+class CurrentLoadPoint(BaseModel):
+    ts_utc: datetime
+    total_mw: float = Field(..., description="Sum of load_mw across every reporting BA at this hour")
+    ba_count: int = Field(..., description="How many BAs contributed (some BAs lag in publishing)")
+
+
+class CurrentLoadResponse(BaseModel):
+    as_of_utc: datetime
+    latest_ts_utc: datetime
+    latest_total_mw: float
+    hours: int
+    points: list[CurrentLoadPoint]

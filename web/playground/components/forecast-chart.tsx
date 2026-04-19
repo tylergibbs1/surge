@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import {
   Area,
   CartesianGrid,
@@ -7,6 +8,7 @@ import {
   Line,
   ReferenceArea,
   ReferenceDot,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
@@ -121,6 +123,41 @@ function CustomTooltip({
   )
 }
 
+// Tick the clock once a minute so the "now" indicator slides across the
+// chart without a full page refresh. Returns the current epoch-ms.
+function useNowTick(periodMs = 60_000): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), periodMs)
+    return () => window.clearInterval(id)
+  }, [periodMs])
+  return now
+}
+
+// Find the row closest to `nowMs`. Returns null if every row is outside
+// the chart window (e.g. the baked forecast is older than it shows — now
+// already marched off the right edge).
+function findNowRow(
+  rows: Row[],
+  nowMs: number,
+): { row: Row; index: number } | null {
+  let bestIdx = -1
+  let bestDist = Infinity
+  for (let i = 0; i < rows.length; i++) {
+    const d = Math.abs(Date.parse(rows[i].ts) - nowMs)
+    if (d < bestDist) {
+      bestDist = d
+      bestIdx = i
+    }
+  }
+  if (bestIdx === -1) return null
+  // Only render the marker if "now" is within ~45 min of a chart tick;
+  // anything further means we're drawing a stale or out-of-range chart
+  // and the dot would be misleading.
+  if (bestDist > 45 * 60_000) return null
+  return { row: rows[bestIdx], index: bestIdx }
+}
+
 export function ForecastChart({
   forecast,
   ba,
@@ -129,11 +166,14 @@ export function ForecastChart({
   ba: BaCode
 }) {
   const rows = buildRows(forecast, ba)
+  const nowMs = useNowTick()
   if (rows.length === 0) return null
 
   // Single-pass stats for the peak marker.
   let peak = rows[0]
   for (const r of rows) if (r.median > peak.median) peak = r
+
+  const nowHit = findNowRow(rows, nowMs)
 
   const tickEvery = Math.max(1, Math.floor(rows.length / 8))
   const bands = nightBands(rows)
@@ -288,6 +328,58 @@ export function ForecastChart({
             style: { fontVariantNumeric: "tabular-nums" },
           }}
         />
+
+        {/* "Now" indicator — vertical guideline + pulsing dot where real
+            time intersects the forecast curve. Slides rightward once a
+            minute (useNowTick above). Suppressed when the chart is of a
+            past/future forecast where "now" falls outside the window. */}
+        {nowHit ? (
+          <>
+            <ReferenceLine
+              x={nowHit.row.hourLabel}
+              stroke="var(--foreground)"
+              strokeOpacity={0.35}
+              strokeDasharray="2 4"
+              strokeWidth={1}
+              ifOverflow="extendDomain"
+              label={{
+                value: "now",
+                position: "insideTop",
+                fill: "var(--muted-foreground)",
+                fontSize: 10,
+                fontWeight: 500,
+                offset: 6,
+              }}
+            />
+            <ReferenceDot
+              yAxisId="load"
+              x={nowHit.row.hourLabel}
+              y={nowHit.row.median}
+              // Shape override: one static dot + one scaled ping. Keeps
+              // the marker distinct from the peak dot (static, no pulse).
+              shape={(props: { cx?: number; cy?: number }) => (
+                <g>
+                  <circle
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={9}
+                    fill="var(--color-median)"
+                    opacity={0.35}
+                    className="surge-now-pulse"
+                  />
+                  <circle
+                    cx={props.cx}
+                    cy={props.cy}
+                    r={4}
+                    fill="var(--color-median)"
+                    stroke="var(--background)"
+                    strokeWidth={2}
+                  />
+                </g>
+              )}
+            />
+          </>
+        ) : null}
       </ComposedChart>
     </ChartContainer>
   )
