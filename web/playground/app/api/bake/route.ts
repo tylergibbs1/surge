@@ -101,6 +101,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   const started = Date.now()
   const results: Array<{ ba: string; ok: boolean; url?: string; error?: string }> = []
   const manifest: Record<string, { url: string; as_of_utc: string }> = {}
+  // Keep successful forecast payloads so we can also write a single
+  // consolidated forecasts/all.json below — powers the /grid page with one
+  // blob read instead of 53.
+  const forecasts: ForecastResponse[] = []
 
   await withConcurrency(BAS, CONCURRENCY, async (ba) => {
     try {
@@ -127,6 +131,7 @@ export async function POST(req: NextRequest): Promise<Response> {
         },
       )
       manifest[ba] = { url: blob.url, as_of_utc: forecast.as_of_utc }
+      forecasts.push(forecast)
       results.push({ ba, ok: true, url: blob.url })
     } catch (e) {
       results.push({ ba, ok: false, error: String(e) })
@@ -158,6 +163,36 @@ export async function POST(req: NextRequest): Promise<Response> {
     results.push({ ba: "__manifest__", ok: false, error: String(e) })
   }
 
+  // Consolidated all-in-one payload for /grid. Ordered by the BAS list so
+  // the client can rely on a deterministic sort when peak_mw-sorting. One
+  // ~800 KB blob replaces 53 × ~15 KB blobs for bulk reads.
+  let allUrl: string | undefined
+  try {
+    const byBa = new Map(forecasts.map((f) => [f.ba, f]))
+    const ordered = BAS.map((b) => byBa.get(b)).filter(
+      (f): f is ForecastResponse => f !== undefined,
+    )
+    const a = await put(
+      "forecasts/all.json",
+      JSON.stringify({
+        baked_at: new Date().toISOString(),
+        horizon: BAKE_HORIZON,
+        forecasts: ordered,
+      }),
+      {
+        access: "private",
+        token: BLOB_TOKEN,
+        contentType: "application/json",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        cacheControlMaxAge: 1800,
+      },
+    )
+    allUrl = a.url
+  } catch (e) {
+    results.push({ ba: "__all__", ok: false, error: String(e) })
+  }
+
   const ok = results.filter((r) => r.ok).length
   const fail = results.length - ok
   return Response.json(
@@ -166,6 +201,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       ok,
       fail,
       manifest_url: manifestUrl,
+      all_url: allUrl,
       results,
     },
     { status: fail === 0 ? 200 : 207 }, // 207 Multi-Status on partial failure

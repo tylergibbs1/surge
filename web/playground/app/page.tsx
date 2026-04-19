@@ -2,23 +2,42 @@
 // (ba, horizon) so the US grid map and the chart stay synced — map click
 // updates the chart; dropdown update highlights the map.
 
+import Link from "next/link"
+
 import { PlaygroundApp } from "@/components/playground-app"
 
 export default function Page() {
   return (
     <div className="bg-background min-h-svh p-6 md:p-10">
       <div className="mx-auto max-w-5xl space-y-6">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Surge playground
-          </h1>
-          <p className="text-muted-foreground max-w-3xl">
-            Open probabilistic day-ahead load forecasts for all 53 US
-            balancing authorities that publish a demand series to EIA-930.
-            Click a region on the map or pick from the dropdown. Model:
-            Chronos-2 fine-tuned on 7 years of public data — matching what
-            utilities pay tens of thousands per year for.
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight">
+              Surge playground
+            </h1>
+            <p className="text-muted-foreground max-w-3xl">
+              Open probabilistic day-ahead load forecasts for all 53 US
+              balancing authorities that publish a demand series to EIA-930.
+              Click a region on the map or pick from the dropdown. Model:
+              Chronos-2 fine-tuned on 7 years of public data — matching what
+              utilities pay tens of thousands per year for.
+            </p>
+          </div>
+          <nav className="flex overflow-hidden rounded-full bg-foreground/5 p-1 text-xs font-medium ring-1 ring-foreground/10">
+            <Link
+              href="/"
+              className="rounded-full bg-background px-3 py-1.5 shadow-sm"
+              aria-current="page"
+            >
+              Map
+            </Link>
+            <Link
+              href="/grid"
+              className="rounded-full px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+            >
+              Grid
+            </Link>
+          </nav>
         </header>
 
         <PlaygroundApp />
