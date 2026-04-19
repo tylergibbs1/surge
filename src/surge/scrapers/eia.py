@@ -26,12 +26,17 @@ def _api_key() -> str:
     return key
 
 
-def load(ba: str, start: str, end: str) -> pl.DataFrame:
+def load(ba: str, start: str, end: str, *, force: bool = False) -> pl.DataFrame:
     """Hourly demand (load) for one balancing authority.
 
     Args:
         ba: EIA BA code, e.g. "PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP".
         start, end: ISO dates (inclusive start, exclusive end).
+        force: Bypass `store.write_through`'s (ba, start, end) manifest
+            idempotency and always append. Used by the hourly ingest cron
+            so rerunning the same window actually refetches EIA's recent
+            in-place revisions. Duplicates collapse on read via
+            `store.scan(dedupe_on=...)`.
     """
     params = {
         "api_key": _api_key(),
@@ -75,7 +80,10 @@ def load(ba: str, start: str, end: str) -> pl.DataFrame:
             pl.lit(as_of).alias("as_of"),
         )
     )
-    store.write_through(
-        "load_hourly", df, source="eia-930", key=f"{ba}:{start}:{end}"
-    )
+    if force:
+        store.append("load_hourly", df)
+    else:
+        store.write_through(
+            "load_hourly", df, source="eia-930", key=f"{ba}:{start}:{end}"
+        )
     return df
