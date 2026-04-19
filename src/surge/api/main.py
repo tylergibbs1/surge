@@ -78,7 +78,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 _CORS_ORIGINS_ENV = os.environ.get("SURGE_ALLOWED_ORIGINS", "")
 _DEFAULT_ORIGINS = [
+    "https://surgeforecast.com",
+    "https://www.surgeforecast.com",
+    # Keep the Vercel-assigned aliases whitelisted so preview deploys and
+    # deployment-URL probes still work without a secondary config.
     "https://surge-omega-nine.vercel.app",
+    "https://surge-grayhaven.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
