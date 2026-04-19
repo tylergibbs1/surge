@@ -26,6 +26,7 @@ const chartConfig = {
   load:     { label: "Actual load",       color: "var(--chart-1)" },
   median:   { label: "Forecast (median)", color: "var(--chart-1)" },
   band:     { label: "80% probability",   color: "var(--chart-1)" },
+  eiaDf:    { label: "EIA day-ahead",     color: "var(--muted-foreground)" },
   temp:     { label: "Temperature",       color: "var(--chart-4)" },
 } satisfies ChartConfig
 
@@ -42,6 +43,14 @@ type ActualsResponse = {
   points: Array<{ ts_utc: string; load_mw: number }>
 }
 
+type EiaDfResponse = {
+  ba: string
+  source: string
+  type: "DF"
+  hours: number
+  points: Array<{ ts_utc: string; df_mw: number }>
+}
+
 type Row = {
   ts_ms: number
   // Actuals (defined for historical rows only).
@@ -51,6 +60,9 @@ type Row = {
   lo?: number
   hi?: number
   bandHeight?: number
+  // EIA's own day-ahead forecast submitted by the BA operator. Not all
+  // BAs publish DF — undefined when absent.
+  eiaDf?: number
   localHour: number
 }
 
@@ -68,8 +80,9 @@ function toLocalHour(ms: number, utcOffset: number): number {
 function buildRows(
   fc: ForecastResponse,
   actuals: ActualsResponse | undefined,
+  eiaDf: EiaDfResponse | undefined,
   ba: BaCode,
-): { rows: Row[]; forecastStartMs: number; lastActualMs: number | null } {
+): { rows: Row[]; forecastStartMs: number; lastActualMs: number | null; hasEiaDf: boolean } {
   const off = BA_UTC_OFFSET[ba] ?? -5
   const rows: Row[] = []
   const forecastFirst = fc.points[0]
@@ -123,7 +136,23 @@ function buildRows(
       localHour: toLocalHour(ts_ms, off),
     })
   }
-  return { rows, forecastStartMs, lastActualMs }
+
+  // Merge EIA DF onto matching rows by ts_ms. Non-RTO BAs often don't
+  // publish DF — in that case `eiaDf.points` is empty and nothing gets
+  // attached, the chart just skips the reference line. The merge index
+  // keeps this O(n+m) rather than quadratic on the 216-row upper bound.
+  let hasEiaDf = false
+  if (eiaDf && eiaDf.points.length > 0) {
+    const byTs = new Map<number, number>()
+    for (let i = 0; i < rows.length; i++) byTs.set(rows[i].ts_ms, i)
+    for (const p of eiaDf.points) {
+      const idx = byTs.get(Date.parse(p.ts_utc))
+      if (idx === undefined) continue
+      rows[idx] = { ...rows[idx], eiaDf: p.df_mw / 1000 }
+      hasEiaDf = true
+    }
+  }
+  return { rows, forecastStartMs, lastActualMs, hasEiaDf }
 }
 
 function buildTempRows(fc: ForecastResponse): TempRow[] {
@@ -211,6 +240,11 @@ function CustomTooltip({
           80% range: {r.lo.toFixed(1)}–{r.hi.toFixed(1)} GW
         </div>
       ) : null}
+      {r.eiaDf !== undefined ? (
+        <div className="text-muted-foreground mt-0.5 tabular-nums">
+          EIA day-ahead: {r.eiaDf.toFixed(1)} GW
+        </div>
+      ) : null}
       <div className="text-muted-foreground mt-1.5 border-t pt-1.5 tabular-nums">
         {fmtTooltipTs(r.ts_ms)} UTC
       </div>
@@ -232,6 +266,12 @@ function useNowTick(periodMs = 60_000): number {
 const actualsFetcher = async (url: string): Promise<ActualsResponse> => {
   const r = await fetch(url)
   if (!r.ok) throw new Error(`actuals ${r.status}`)
+  return r.json()
+}
+
+const eiaDfFetcher = async (url: string): Promise<EiaDfResponse> => {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`eia-forecast ${r.status}`)
   return r.json()
 }
 
@@ -257,14 +297,29 @@ export function ForecastChart({
     },
   )
 
+  // EIA's own day-ahead forecast for this BA — the one the operator
+  // submits to EIA every morning. Best-effort: many smaller non-RTO BAs
+  // don't publish DF, in which case this stays undefined and the
+  // reference line is omitted. A failure here never blocks our chart.
+  const { data: eiaDf } = useSWR<EiaDfResponse>(
+    `/api/eia-forecast?ba=${ba}&hours=168`,
+    eiaDfFetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 300_000,
+      keepPreviousData: true,
+      shouldRetryOnError: false,
+    },
+  )
+
   const nowMs = useNowTick()
 
   // All heavy derivations live in useMemo so the 60-second now-tick just
   // moves the ReferenceLine — it doesn't rebuild the 200+ row dataset,
   // re-scan for peak, or recompute night bands.
-  const { rows, forecastStartMs, lastActualMs } = useMemo(
-    () => buildRows(forecast, actuals, ba),
-    [forecast, actuals, ba],
+  const { rows, forecastStartMs, lastActualMs, hasEiaDf } = useMemo(
+    () => buildRows(forecast, actuals, eiaDf, ba),
+    [forecast, actuals, eiaDf, ba],
   )
   const tempRows = useMemo(() => buildTempRows(forecast), [forecast])
   const peakRow = useMemo<Row | null>(() => {
@@ -441,6 +496,25 @@ export function ForecastChart({
             isAnimationActive={false}
             connectNulls={false}
           />
+
+          {/* EIA's day-ahead demand forecast — the BA operator's own
+              submission, shown as a ghost line so readers can eyeball
+              surge's spread against operator consensus. Only drawn when
+              the BA actually publishes DF. */}
+          {hasEiaDf ? (
+            <Line
+              yAxisId="load"
+              type="linear"
+              dataKey="eiaDf"
+              stroke="var(--color-eiaDf)"
+              strokeWidth={1.25}
+              strokeOpacity={0.7}
+              dot={false}
+              activeDot={{ r: 3, strokeWidth: 0, fill: "var(--color-eiaDf)" }}
+              isAnimationActive={false}
+              connectNulls={false}
+            />
+          ) : null}
 
           {/* Forecast-start divider. The canonical "actuals end / forecast
               begins" visual break the skill calls for. */}
