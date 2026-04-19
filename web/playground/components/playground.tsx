@@ -188,11 +188,15 @@ export function Playground({
           </div>
 
           <div className="space-y-3 pt-1">
-            <label className="text-muted-foreground block text-xs font-medium uppercase tracking-wider tabular-nums">
+            <label
+              id="horizon-label"
+              className="text-muted-foreground block text-xs font-medium uppercase tracking-wider tabular-nums"
+            >
               Forecast horizon — {horizon} hours ({(horizon / 24).toFixed(1)} days)
             </label>
             <div className="pt-1">
               <Slider
+                aria-labelledby="horizon-label"
                 min={1}
                 max={168}
                 step={1}

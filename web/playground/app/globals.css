@@ -146,3 +146,17 @@
     @apply hidden!;
     }
 }
+
+/* Respect the OS-level reduced-motion preference. The selected BA marker
+   uses `animate-ping` (an infinite scale pulse) which is visually loud —
+   kill the animation entirely for users who've opted out. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

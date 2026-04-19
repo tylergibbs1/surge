@@ -28,14 +28,14 @@ export default function Page() {
           <nav className="flex overflow-hidden rounded-full bg-foreground/5 p-1 text-xs font-medium ring-1 ring-foreground/10">
             <Link
               href="/"
-              className="rounded-full bg-background px-3 py-1.5 shadow-sm"
+              className="rounded-full bg-background px-3 py-1.5 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
               aria-current="page"
             >
               Map
             </Link>
             <Link
               href="/grid"
-              className="rounded-full px-3 py-1.5 text-muted-foreground transition hover:text-foreground"
+              className="rounded-full px-3 py-1.5 text-muted-foreground transition-colors duration-200 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
             >
               Grid
             </Link>

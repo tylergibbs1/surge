@@ -5,11 +5,14 @@
 export function Glossary() {
   return (
     <details className="group rounded-xl border border-foreground/10 bg-card/50 open:bg-card">
-      <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer items-center justify-between rounded-xl px-4 py-3 text-sm font-medium marker:hidden transition-colors duration-150 hover:bg-foreground/[0.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 [&::-webkit-details-marker]:hidden">
         <span>What does this all mean?</span>
+        {/* Optical nudge: the ▾ glyph is top-weighted in most fonts, so
+            a bare geometric center reads as slightly low. -translate-y-px
+            pulls it one pixel up into the line's vertical midpoint. */}
         <span
           aria-hidden="true"
-          className="text-xs text-muted-foreground transition group-open:rotate-180"
+          className="-translate-y-px text-xs text-muted-foreground transition-transform duration-300 group-open:rotate-180 group-open:translate-y-0"
         >
           ▾
         </span>

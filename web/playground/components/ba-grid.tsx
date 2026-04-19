@@ -180,7 +180,7 @@ export function BaGrid({
                 setInterFilter("All")
                 setTierFilter("All")
               }}
-              className="text-xs underline-offset-4 hover:underline"
+              className="rounded-sm text-xs underline-offset-4 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
             >
               Clear filters
             </button>
@@ -235,7 +235,7 @@ function FilterGroup<T extends string>({
               key={opt}
               type="button"
               onClick={() => onChange(opt)}
-              className={`flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition ${
+              className={`flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 ${
                 active
                   ? "bg-foreground/8 font-medium text-foreground"
                   : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"
@@ -271,7 +271,7 @@ function SortOption<T extends string>({
     <button
       type="button"
       onClick={() => onSelect(value)}
-      className={`rounded-md px-2 py-1.5 text-left text-xs transition ${
+      className={`rounded-md px-2 py-1.5 text-left text-xs transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50 ${
         active
           ? "bg-foreground/8 font-medium text-foreground"
           : "text-muted-foreground hover:bg-foreground/5 hover:text-foreground"

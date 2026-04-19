@@ -96,7 +96,7 @@ export function BaCard({ ba, points, interconnect, isRto, accentHex }: Props) {
   return (
     <Link
       href={`/?ba=${ba}&horizon=24`}
-      className="group relative flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 transition hover:ring-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
+      className="group relative flex flex-col gap-3 rounded-xl bg-card p-4 text-card-foreground ring-1 ring-foreground/10 transition-[box-shadow,outline,ring-color,background-color] duration-150 hover:ring-foreground/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/50"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
