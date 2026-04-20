@@ -357,8 +357,10 @@ export function GridMap({ horizon = 24, selected, onSelect }: Props) {
                           {(BA_PEAK_MW[ba] / 1000).toFixed(0)} GW)
                         </div>
                       </>
-                    ) : (
+                    ) : !all ? (
                       <div>loading…</div>
+                    ) : (
+                      <div>forecast unavailable</div>
                     )}
                   </div>
                 </div>

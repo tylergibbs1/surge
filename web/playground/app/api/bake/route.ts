@@ -166,8 +166,21 @@ export async function POST(req: NextRequest): Promise<Response> {
   // Consolidated all-in-one payload for /grid. Ordered by the BAS list so
   // the client can rely on a deterministic sort when peak_mw-sorting. One
   // ~800 KB blob replaces 53 × ~15 KB blobs for bulk reads.
+  //
+  // Only overwrite when at least one sub-forecast succeeded — otherwise a
+  // fully-failed bake (e.g. Modal rate-limited) would replace the previous
+  // good all.json with `forecasts: []`, which clients render as an empty
+  // state and the map tooltip shows "loading…" forever. Keeping the
+  // previous blob intact on a bad run lets readers fall back to day-old
+  // data instead of no data.
   let allUrl: string | undefined
-  try {
+  if (forecasts.length === 0) {
+    results.push({
+      ba: "__all__",
+      ok: false,
+      error: "skipped: zero successful sub-forecasts; preserving previous all.json",
+    })
+  } else try {
     const byBa = new Map(forecasts.map((f) => [f.ba, f]))
     const ordered = BAS.map((b) => byBa.get(b)).filter(
       (f): f is ForecastResponse => f !== undefined,
