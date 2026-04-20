@@ -85,7 +85,7 @@ export default async function GridPage() {
         </header>
 
         <main id="main">
-          {data ? (
+          {data && data.forecasts.length > 0 ? (
             <BaGrid forecasts={data.forecasts} bakedAt={data.baked_at} />
           ) : (
             <div className="rounded-xl border border-dashed border-foreground/15 p-10 text-center">
