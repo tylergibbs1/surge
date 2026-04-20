@@ -1,8 +1,11 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useMemo } from "react"
-import useSWR from "swr"
+import { useEffect, useMemo, useState } from "react"
+import { preload } from "swr"
+import useSWRImmutable from "swr/immutable"
+
+import { swrFetcher } from "@/components/swr-provider"
 
 import { ErrorBanner } from "@/components/error-banner"
 import { ForecastChartSkeleton } from "@/components/forecast-chart-skeleton"
@@ -54,13 +57,36 @@ function fmtLocalPeakTime(tsUtc: string, ba: BaCode): string {
   })
 }
 
-async function fetcher(url: string): Promise<ForecastResponse> {
-  const r = await fetch(url)
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}))
-    throw new Error(body.detail ?? body.error ?? `HTTP ${r.status}`)
-  }
-  return r.json()
+// CSV export of the currently-rendered forecast slice. Spreadsheets need
+// a quoted string for the timestamp (Excel mangles ISO-without-quotes into
+// its own date format); numbers stay numeric so formulas work out of the
+// box. temp_c is blank when the API didn't ship one rather than "null",
+// which Excel would import as the literal string.
+function toCsv(fc: ForecastResponse): string {
+  const header = "ts_utc,median_mw,p10_mw,p90_mw,temp_c"
+  const rows = fc.points.map((p) => {
+    const t = p.temp_c == null ? "" : p.temp_c.toFixed(2)
+    return `"${p.ts_utc}",${p.median_mw},${p.p10_mw},${p.p90_mw},${t}`
+  })
+  return [header, ...rows].join("\n") + "\n"
+}
+
+function downloadCsv(fc: ForecastResponse): void {
+  const csv = toCsv(fc)
+  const asOf = fc.as_of_utc.slice(0, 13).replace(/[-:]/g, "") // 20260419T20
+  const fname = `surge-${fc.ba}-${asOf}Z-h${fc.horizon}.csv`
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = fname
+  a.rel = "noopener"
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Revoke on next tick — immediate revoke races the download on some
+  // browsers (Safari in particular).
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 // We always request the maximum horizon (168 h) from the inference layer
@@ -83,15 +109,22 @@ export function Playground({
 
   // Single fetch at max horizon; slider just slices. SWR's key stays
   // stable regardless of slider value so rapid drags don't even stream.
-  const { data: full, error } = useSWR<ForecastResponse>(
+  // Immutable because the daily bake publishes once at ~06:15 UTC — no
+  // value in revalidating mid-session. Global fetcher + defaults come
+  // from <SwrProvider>.
+  const { data: full, error } = useSWRImmutable<ForecastResponse>(
     `/api/forecast?ba=${ba}&horizon=${MAX_HORIZON}`,
-    fetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 300_000,      // matches API Cache-Control
-      keepPreviousData: true,
-    },
   )
+
+  // Kill the parent→child waterfall: fire the two child-chart fetches
+  // (actuals + EIA DF) the moment `ba` is known, without waiting for
+  // the lazy-loaded Recharts chunk to mount ForecastChart. By the time
+  // the chart calls useSWRImmutable on the same keys, the responses
+  // are already in SWR's cache — the hook is a synchronous read.
+  useEffect(() => {
+    preload(`/api/actuals?ba=${ba}&hours=48`, swrFetcher)
+    preload(`/api/eia-forecast?ba=${ba}&hours=168`, swrFetcher)
+  }, [ba])
 
   // Truncate locally to the user's selected horizon — zero network calls.
   const data = useMemo<ForecastResponse | null>(() => {
@@ -118,6 +151,33 @@ export function Playground({
     const peakDeltaPct = ((peak - mean) / mean) * 100
     return { peak, peakPt, mean, piPct, peakDeltaPct }
   }, [data])
+
+  // Peak across the FULL 168h window, independent of slider position. This
+  // answers "when does the grid hit peak this week?" even when the user has
+  // the horizon scoped to 24h — otherwise that number only ever reflects
+  // the visible slice.
+  const weekPeak = useMemo(() => {
+    if (!full || full.points.length <= 24) return null
+    let peak = -Infinity
+    let peakPt = full.points[0]
+    for (const p of full.points) {
+      if (p.median_mw > peak) { peak = p.median_mw; peakPt = p }
+    }
+    return { peak, peakPt }
+  }, [full])
+
+  const [copied, setCopied] = useState(false)
+  const onCopyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API can fail on insecure contexts / older Safari. The
+      // URL is already in the address bar — silently dropping the feedback
+      // is the least-surprising fallback.
+    }
+  }
 
   // Plain-English takeaway for the card title. Prefers "peak at X
   // tomorrow" when stats are available; falls back to the BA name while
@@ -247,9 +307,9 @@ export function Playground({
         {data ? <ForecastChart forecast={data} ba={ba} /> : <ForecastChartSkeleton />}
 
         {stats ? (
-          <div className="text-muted-foreground grid grid-cols-2 gap-4 border-t pt-4 text-sm tabular-nums md:grid-cols-3">
+          <div className="text-muted-foreground grid grid-cols-2 gap-4 border-t pt-4 text-sm tabular-nums md:grid-cols-4">
             <div>
-              <div className="text-xs uppercase">Peak</div>
+              <div className="text-xs uppercase">Peak (window)</div>
               <div className="text-foreground font-mono text-base">
                 {(stats.peak / 1000).toFixed(1)} GW
               </div>
@@ -270,6 +330,60 @@ export function Playground({
               </div>
               <div className="text-xs">at step 1</div>
             </div>
+            {weekPeak ? (
+              <div>
+                <div className="text-xs uppercase">Peak (next 7d)</div>
+                <div className="text-foreground font-mono text-base">
+                  {(weekPeak.peak / 1000).toFixed(1)} GW
+                </div>
+                <div className="text-xs">
+                  {new Date(weekPeak.peakPt.ts_utc).toLocaleString("en-US", {
+                    weekday: "short",
+                    hour: "numeric",
+                    hour12: true,
+                    timeZone: "UTC",
+                  })} UTC
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {data ? (
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
+            <button
+              type="button"
+              onClick={() => downloadCsv(data)}
+              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2.5 py-1.5 uppercase tracking-wider ring-1 ring-foreground/5 transition-colors duration-150 hover:bg-foreground/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 active:scale-[0.97]"
+              aria-label={`Download ${horizon}-hour forecast as CSV`}
+            >
+              <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 2v8.5M4.5 7 8 10.5 11.5 7M2.5 13.5h11" />
+              </svg>
+              Download CSV
+            </button>
+            <button
+              type="button"
+              onClick={onCopyShareLink}
+              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2.5 py-1.5 uppercase tracking-wider ring-1 ring-foreground/5 transition-colors duration-150 hover:bg-foreground/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 active:scale-[0.97]"
+              aria-label="Copy share link"
+            >
+              {copied ? (
+                <>
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 8.5 6.5 12l7-7.5" />
+                  </svg>
+                  Copied
+                </>
+              ) : (
+                <>
+                  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6.5 9.5a2 2 0 0 0 2.83 0l2.83-2.83a2 2 0 0 0-2.83-2.83l-.71.71M9.5 6.5a2 2 0 0 0-2.83 0L3.84 9.34a2 2 0 0 0 2.83 2.83l.71-.71" />
+                  </svg>
+                  Share link
+                </>
+              )}
+            </button>
           </div>
         ) : null}
 

@@ -177,19 +177,22 @@ export function UsDemandHero() {
           color="#5CC8A2"
           window={WINDOW_SECS}
           fill
-          grid
+          // Grid labels ("440.0 GW") collided with the live dot +
+          // momentum chevrons that Liveline paints at the data's right
+          // edge. The headline number above the chart already carries
+          // the current value; the absolute reference scale inside the
+          // chart was redundant. Clean sparkline wins.
+          grid={false}
           badge={false}
           scrub={false}
           showValue
           valueMomentumColor
           momentum
           formatValue={formatValue}
-          // Explicit padding override — Liveline's default right=12 (with
-          // badge=false) puts the live dot and momentum arrows right up
-          // against the canvas edge. 40 px gives them room to breathe
-          // and keeps the grid labels ("200.0") from kissing the card
-          // border. Left matches for visual symmetry.
-          padding={{ top: 12, right: 40, bottom: 28, left: 16 }}
+          // Right padding keeps the live dot + momentum chevrons off
+          // the card edge. With `grid={false}` there are no axis labels
+          // to collide with anymore, so this is just breathing room.
+          padding={{ top: 12, right: 24, bottom: 12, left: 16 }}
           // Matches Liveline's default but makes the intent explicit: the
           // line breathes toward the new value at 8% per frame, tying
           // every discrete hourly update to the 60-fps render loop.

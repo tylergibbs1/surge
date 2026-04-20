@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
-import useSWR from "swr"
+import useSWRImmutable from "swr/immutable"
 
 import {
   ChartContainer,
@@ -263,18 +263,6 @@ function useNowTick(periodMs = 60_000): number {
   return now
 }
 
-const actualsFetcher = async (url: string): Promise<ActualsResponse> => {
-  const r = await fetch(url)
-  if (!r.ok) throw new Error(`actuals ${r.status}`)
-  return r.json()
-}
-
-const eiaDfFetcher = async (url: string): Promise<EiaDfResponse> => {
-  const r = await fetch(url)
-  if (!r.ok) throw new Error(`eia-forecast ${r.status}`)
-  return r.json()
-}
-
 export function ForecastChart({
   forecast,
   ba,
@@ -287,29 +275,22 @@ export function ForecastChart({
   // than blocking the whole component on an extra network hop. The
   // `actualsError` flag surfaces the miss as a subtle chip so readers
   // understand why there's no solid line running into the forecast.
-  const { data: actuals, error: actualsError } = useSWR<ActualsResponse>(
+  // Immutable: the actuals window is cache-keyed by ba+hours and the
+  // upstream series is append-only, so nothing inside the window
+  // changes after first fetch.
+  const { data: actuals, error: actualsError } = useSWRImmutable<ActualsResponse>(
     `/api/actuals?ba=${ba}&hours=${ACTUALS_HOURS}`,
-    actualsFetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 300_000,
-      keepPreviousData: true,
-    },
   )
 
   // EIA's own day-ahead forecast for this BA — the one the operator
   // submits to EIA every morning. Best-effort: many smaller non-RTO BAs
   // don't publish DF, in which case this stays undefined and the
-  // reference line is omitted. A failure here never blocks our chart.
-  const { data: eiaDf } = useSWR<EiaDfResponse>(
+  // reference line is omitted. `shouldRetryOnError: false` because a
+  // missing-DF miss is a known-negative — retrying is pure noise.
+  const { data: eiaDf } = useSWRImmutable<EiaDfResponse>(
     `/api/eia-forecast?ba=${ba}&hours=168`,
-    eiaDfFetcher,
-    {
-      revalidateOnFocus: false,
-      dedupingInterval: 300_000,
-      keepPreviousData: true,
-      shouldRetryOnError: false,
-    },
+    null,
+    { shouldRetryOnError: false },
   )
 
   const nowMs = useNowTick()
@@ -317,6 +298,9 @@ export function ForecastChart({
   // comparison is the whole point. Users who find it distracting can
   // toggle it off per-session.
   const [showEiaDf, setShowEiaDf] = useState(true)
+  // Temperature small-multiple is on by default when the API ships temp_c
+  // (7 RTO BAs today); off-switch is per-session, same pattern as EIA DF.
+  const [showTemp, setShowTemp] = useState(true)
 
   // All heavy derivations live in useMemo so the 60-second now-tick just
   // moves the ReferenceLine — it doesn't rebuild the 200+ row dataset,
@@ -326,6 +310,29 @@ export function ForecastChart({
     [forecast, actuals, eiaDf, ba],
   )
   const tempRows = useMemo(() => buildTempRows(forecast), [forecast])
+  // The backend (forecaster.py) fills future temperature with the last
+  // observed ASOS value — a single scalar repeated across `horizon`
+  // steps. That renders as a dead-flat line which reads as "surge is
+  // forecasting 28°C forever" when it actually means "model has no
+  // weather forecast input, held constant." Detect that case and swap
+  // the chart for an honest inline chip. When HRRR/GFS eventually wires
+  // up as a future covariate this threshold will trip the "varying"
+  // branch automatically.
+  const tempInfo = useMemo(() => {
+    if (tempRows.length === 0) return { kind: "absent" as const }
+    let lo = Infinity
+    let hi = -Infinity
+    for (const r of tempRows) {
+      if (r.tempC < lo) lo = r.tempC
+      if (r.tempC > hi) hi = r.tempC
+    }
+    const range = hi - lo
+    // 1°C threshold: float roundtrips through float32 on the backend so
+    // we need some slack, but real diurnal variation is 8–15°C — there's
+    // no ambiguity at this threshold.
+    if (range < 1) return { kind: "constant" as const, value: tempRows[0].tempC }
+    return { kind: "varying" as const }
+  }, [tempRows])
   const peakRow = useMemo<Row | null>(() => {
     let best: Row | null = null
     for (const r of rows) {
@@ -370,10 +377,39 @@ export function ForecastChart({
       (actualsHours > 0 ? `${actualsHours} hours of historical context shown.` : "No historical context shown.")
     : `${BA_LABEL[ba]} forecast chart.`
 
+  // Temperature toggle only makes sense when there's a real varying
+  // series to hide/show. The "constant" case is informational (a chip),
+  // not something to toggle — toggling off would just hide the fact
+  // that surge has no weather forecast, which we want to surface.
+  const hasTempSeries = tempInfo.kind === "varying"
+  // Freshness signal: how old is this forecast? The bake runs daily at
+  // 06:15 UTC; anything > ~25h means the bake stalled. We colour-code so
+  // a reader can glance at the pill and know if the number they're
+  // looking at is fresh. Derive from `nowMs` (state-backed via
+  // useNowTick) so the pill updates in step with the "now" indicator —
+  // and so the render stays pure per react-hooks/purity.
+  const ageMs = nowMs - Date.parse(forecast.as_of_utc)
+  const ageH = Math.max(0, Math.round(ageMs / 3_600_000))
+  const ageStale = ageH >= 25
+  const ageLabel =
+    ageH < 1 ? "fresh" : ageH === 1 ? "issued 1h ago" : `issued ${ageH}h ago`
+
   return (
     <figure className="space-y-2" role="group" aria-label={ariaSummary}>
       <p className="sr-only">{ariaSummary}</p>
       <div className="flex flex-wrap items-center gap-2 text-[10px]">
+        <span
+          role="status"
+          aria-label={`Forecast ${ageLabel}`}
+          className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 uppercase tracking-wider ring-1 ring-foreground/5"
+        >
+          <span
+            aria-hidden="true"
+            className={`inline-block size-1.5 rounded-full ${ageStale ? "bg-amber-500" : "bg-emerald-500"}`}
+            style={ageStale ? undefined : { boxShadow: "0 0 6px var(--chart-1)" }}
+          />
+          <span className="tabular-nums normal-case">{ageLabel}</span>
+        </span>
         {actualsError && !actuals ? (
           <p
             role="status"
@@ -400,6 +436,38 @@ export function ForecastChart({
               EIA day-ahead
             </span>
           </button>
+        ) : null}
+        {hasTempSeries ? (
+          <button
+            type="button"
+            onClick={() => setShowTemp((v) => !v)}
+            aria-pressed={showTemp}
+            aria-label={`${showTemp ? "Hide" : "Show"} temperature overlay`}
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 uppercase tracking-wider ring-1 ring-foreground/5 transition-colors duration-150 hover:bg-foreground/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/40 active:scale-[0.97]"
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block h-[2px] w-4 rounded-sm"
+              style={{ backgroundColor: "var(--color-temp)", opacity: showTemp ? 0.9 : 0.3 }}
+            />
+            <span className={showTemp ? "text-foreground" : ""}>
+              Temperature
+            </span>
+          </button>
+        ) : tempInfo.kind === "constant" ? (
+          <span
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 uppercase tracking-wider ring-1 ring-foreground/5"
+            title="The model uses ASOS temperature as a covariate but has no weather forecast input — future temperature is held at the last observed value."
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block h-[2px] w-4 rounded-sm"
+              style={{ backgroundColor: "var(--color-temp)", opacity: 0.6 }}
+            />
+            <span className="tabular-nums normal-case">
+              Temp held at {tempInfo.value.toFixed(0)}°C
+            </span>
+          </span>
         ) : null}
       </div>
       <ChartContainer config={chartConfig} className="h-[360px] w-full">
@@ -605,8 +673,11 @@ export function ForecastChart({
 
       {/* Temperature small multiple — aligned x-axis via syncId so the
           tooltip crosshair moves in lockstep. Sits below the load panel
-          rather than sharing a right-side y-axis (dual axes are bad). */}
-      {tempRows.length > 0 ? (
+          rather than sharing a right-side y-axis (dual axes are bad).
+          Only renders when the series actually varies; the backend
+          currently holds future temp constant (flat line), which we
+          surface as a chip instead of a misleading chart. */}
+      {hasTempSeries && showTemp ? (
         <ChartContainer config={chartConfig} className="h-[90px] w-full">
           <ComposedChart
             data={tempRows}
@@ -640,6 +711,7 @@ export function ForecastChart({
               dataKey="tempC"
               stroke="var(--color-temp)"
               strokeWidth={1.5}
+              strokeDasharray="4 3"
               dot={false}
               isAnimationActive={false}
             />

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
+import { SwrProvider } from "@/components/swr-provider"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ThirdPartyAnalytics } from "@/components/third-party-analytics"
 import { cn } from "@/lib/utils"
@@ -74,7 +75,9 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <SwrProvider>{children}</SwrProvider>
+        </ThemeProvider>
         <ThirdPartyAnalytics />
       </body>
     </html>
