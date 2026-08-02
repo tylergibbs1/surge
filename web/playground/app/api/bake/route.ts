@@ -1,222 +1,561 @@
-// Daily bake: runs inference for every forecastable BA and writes the
-// result to Vercel Blob so the /api/forecast route can serve static JSON
-// at CDN latency. Triggered by a GitHub Actions cron (see
-// `.github/workflows/bake.yml`) with a shared Bearer token.
+// Authenticated daily publisher for the seven-RTO v0.2 forecast ledger.
 //
-// Why this lives in Next.js (and not Modal): @vercel/blob's SDK is
-// first-party for this runtime. Keeping the Blob integration here means
-// we avoid hand-rolling Vercel's REST API in Python and everything
-// auth-related stays on one side of the wire.
+// One serialized Modal publisher commits all seven forecasts and the run
+// marker durably before this route mirrors that immutable run into Blob.
 
-import { put } from "@vercel/blob"
+import { head, put } from "@vercel/blob"
 import { NextRequest } from "next/server"
 
-import { BAS, type BaCode } from "@/lib/us-grid-geo"
+import { RTO_CODES, type RtoCode } from "@/lib/v2-contracts"
 
-const MODAL_URL =
-  process.env.SURGE_API_URL ??
-  "https://tylergibbs1--surge-api-fastapi-app.modal.run"
+const PUBLISHER_URL = process.env.SURGE_PUBLISHER_URL
 
 const BAKE_SECRET = process.env.BAKE_SECRET
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
+const LEDGER_KEY = process.env.SURGE_LEDGER_KEY
+const ALLOWED_API_HOSTS = new Set(
+  (
+    process.env.SURGE_ALLOWED_API_HOSTS ??
+    "tylergibbs1--surge-api-v02-ledger-publisher-app.modal.run,127.0.0.1,localhost"
+  )
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean),
+)
 
-// Max horizon we serve. Clients slice this down at read time. 168h = 7d is
-// the API's upper bound.
 const BAKE_HORIZON = 168
+const MAX_DATA_LAG_MS = 12 * 60 * 60 * 1000
+const MAX_ISSUANCE_AGE_MS = 90 * 60 * 1000
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
 
-// How many BAs to fetch from Modal in parallel. Modal is configured with
-// max_containers=20 and scaledown_window=600, so ~10 concurrent is a sweet
-// spot: fast enough to finish in ~30s, gentle enough not to cold-start
-// 20 containers simultaneously.
-const CONCURRENCY = 10
-
-// Run on the Node runtime (not edge) — @vercel/blob's put() needs Node.
-// Default fluid-compute timeout is 300s, plenty for 53 sequential-ish
-// Modal calls even with cold starts.
 export const runtime = "nodejs"
 export const maxDuration = 300
 
+type ForecastPoint = {
+  ts_utc: string
+  mean_mw: number
+  median_mw: number
+  p10_mw: number
+  p90_mw: number
+  temp_c?: number | null
+}
+
 type ForecastResponse = {
+  schema_version: "2.0"
+  issuance_id: string
+  run_id: string
   ba: string
   model: string
+  model_revision: string
+  model_artifact_sha256?: string | null
   as_of_utc: string
+  generated_at_utc: string
+  issued_at_utc: string
+  data_cutoff_utc: string
+  feature_cutoff_utc: string
   context_start_utc: string
   context_end_utc: string
   horizon: number
   units: string
-  points: Array<{
-    ts_utc: string
-    median_mw: number
-    p10_mw: number
-    p90_mw: number
-    temp_c?: number | null
-  }>
+  feature_spec_version: string
+  feature_spec_sha256: string
+  feature_snapshot_sha256: string
+  availability_mode: string
+  point_estimate_kind: "median" | "mean"
+  mase_scale_24: number
+  code_revision: string
+  committed: boolean
+  run_published: boolean
+  published_at_utc: string | null
+  warnings: string[]
+  points: ForecastPoint[]
 }
 
-async function fetchOneForecast(ba: BaCode): Promise<ForecastResponse> {
-  // Ask Modal for the max horizon so one bake covers every client request.
-  const r = await fetch(
-    `${MODAL_URL}/forecast/${encodeURIComponent(ba)}?horizon=${BAKE_HORIZON}`,
-    { cache: "no-store" },
+type LedgerBakeResponse = {
+  schema_version: "2.0"
+  run: {
+    run_id: string
+    scheduled_for_utc: string
+    published_at_utc: string
+    required_bas: string[]
+    issuance_ids: Record<string, string>
+  }
+  forecasts: ForecastResponse[]
+  committed_regions: number
+  run_published: true
+}
+
+type BakeResult = {
+  ba: string
+  ok: boolean
+  issuance_id?: string
+  url?: string
+  error?: string
+}
+
+type RunProvenance = {
+  model: string
+  model_revision: string
+  model_artifact_sha256: string | null
+  code_revision: string
+  feature_spec_version: string
+  feature_spec_sha256: string
+  availability_mode: string
+  point_estimate_kind: "median" | "mean"
+  units: string
+  horizon: number
+}
+
+function parseUtc(value: string, label: string): number {
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp) || !value.endsWith("Z")) {
+    throw new Error(`${label}: expected an ISO-8601 UTC timestamp`)
+  }
+  return timestamp
+}
+
+function validateForecast(
+  value: ForecastResponse,
+  expectedBa: RtoCode,
+  scheduledForUtc: string,
+  checkedAtMs: number,
+): ForecastResponse {
+  if (value.schema_version !== "2.0") throw new Error(`${expectedBa}: wrong schema`)
+  if (value.ba !== expectedBa) throw new Error(`${expectedBa}: BA mismatch`)
+  if (!value.issuance_id || !value.run_id) throw new Error(`${expectedBa}: missing IDs`)
+  if (!value.committed || !value.run_published || !value.published_at_utc) {
+    throw new Error(`${expectedBa}: issuance is not durably published`)
+  }
+  if (
+    !value.model ||
+    !value.model_revision ||
+    !value.code_revision ||
+    value.code_revision === "unknown"
+  ) {
+    throw new Error(`${expectedBa}: missing model/code provenance`)
+  }
+  if (!value.feature_spec_version || !value.feature_spec_sha256) {
+    throw new Error(`${expectedBa}: missing feature specification provenance`)
+  }
+  if (!value.feature_snapshot_sha256) {
+    throw new Error(`${expectedBa}: missing feature snapshot digest`)
+  }
+  if (
+    value.feature_spec_version !== "load-v2-core" ||
+    value.availability_mode !== "exact_vintage" ||
+    value.point_estimate_kind !== "median" ||
+    value.units !== "MW"
+  ) {
+    throw new Error(`${expectedBa}: forecast does not satisfy the v0.2 live contract`)
+  }
+  if (value.horizon !== BAKE_HORIZON || value.points.length !== BAKE_HORIZON) {
+    throw new Error(`${expectedBa}: expected ${BAKE_HORIZON} points`)
+  }
+
+  const issuedAt = parseUtc(value.issued_at_utc, `${expectedBa} issued_at_utc`)
+  const scheduledFor = parseUtc(scheduledForUtc, "scheduled_for_utc")
+  if (issuedAt > checkedAtMs + MAX_CLOCK_SKEW_MS) {
+    throw new Error(`${expectedBa}: issuance is unexpectedly in the future`)
+  }
+  if (checkedAtMs - issuedAt > MAX_ISSUANCE_AGE_MS) {
+    throw new Error(`${expectedBa}: issuance is too old for publication`)
+  }
+  if (
+    scheduledFor > issuedAt + MAX_CLOCK_SKEW_MS ||
+    issuedAt - scheduledFor > MAX_ISSUANCE_AGE_MS
+  ) {
+    throw new Error(`${expectedBa}: issuance is not aligned to the requested slot`)
+  }
+  const dataCutoff = parseUtc(value.data_cutoff_utc, `${expectedBa} data_cutoff_utc`)
+  const featureCutoff = parseUtc(
+    value.feature_cutoff_utc,
+    `${expectedBa} feature_cutoff_utc`,
   )
-  if (!r.ok) throw new Error(`${ba}: upstream ${r.status}`)
-  return (await r.json()) as ForecastResponse
-}
+  if (dataCutoff > issuedAt || featureCutoff > issuedAt) {
+    throw new Error(`${expectedBa}: cutoff is after issuance`)
+  }
+  if (issuedAt - dataCutoff > MAX_DATA_LAG_MS) {
+    throw new Error(`${expectedBa}: source data is more than 12 hours old`)
+  }
 
-async function withConcurrency<T>(
-  items: readonly T[],
-  limit: number,
-  work: (item: T) => Promise<unknown>,
-): Promise<void> {
-  // Hand-rolled p-limit: avoids pulling in a dep for a 10-line helper.
-  const queue = items.slice()
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (queue.length) {
-      const next = queue.shift()
-      if (next !== undefined) await work(next)
+  let previous = 0
+  value.points.forEach((point, index) => {
+    const validAt = parseUtc(point.ts_utc, `${expectedBa} point ${index}`)
+    if (validAt <= issuedAt) throw new Error(`${expectedBa}: point is not post-issuance`)
+    if (index > 0 && validAt - previous !== HOUR_MS) {
+      throw new Error(`${expectedBa}: points are not contiguous hourly values`)
+    }
+    previous = validAt
+    const numbers = [point.mean_mw, point.p10_mw, point.median_mw, point.p90_mw]
+    if (numbers.some((number) => !Number.isFinite(number) || number < 0)) {
+      throw new Error(`${expectedBa}: non-finite or negative forecast value`)
+    }
+    if (!(point.p10_mw <= point.median_mw && point.median_mw <= point.p90_mw)) {
+      throw new Error(`${expectedBa}: crossing quantiles`)
     }
   })
-  await Promise.all(workers)
+  return value
+}
+
+function runProvenance(value: ForecastResponse): RunProvenance {
+  return {
+    model: value.model,
+    model_revision: value.model_revision,
+    model_artifact_sha256: value.model_artifact_sha256 ?? null,
+    code_revision: value.code_revision,
+    feature_spec_version: value.feature_spec_version,
+    feature_spec_sha256: value.feature_spec_sha256,
+    availability_mode: value.availability_mode,
+    point_estimate_kind: value.point_estimate_kind,
+    units: value.units,
+    horizon: value.horizon,
+  }
+}
+
+function assertUniformRunProvenance(
+  forecasts: readonly ForecastResponse[],
+): RunProvenance {
+  if (forecasts.length !== RTO_CODES.length) {
+    throw new Error(`expected ${RTO_CODES.length} forecasts for publication`)
+  }
+  const provenance = runProvenance(forecasts[0])
+  const expected = JSON.stringify(provenance)
+  for (const forecast of forecasts.slice(1)) {
+    if (JSON.stringify(runProvenance(forecast)) !== expected) {
+      throw new Error(`${forecast.ba}: mixed run provenance`)
+    }
+  }
+  return provenance
+}
+
+function scheduledSlot(now = new Date()): string {
+  const slot = new Date(now)
+  // The scheduled job still lands on 06:15 UTC. An early/manual invocation
+  // uses the most recent hourly :15 slot instead of colliding with yesterday's
+  // completed release and accidentally accepting a day-old retry.
+  slot.setUTCMinutes(15, 0, 0)
+  if (slot.getTime() > now.getTime()) slot.setUTCHours(slot.getUTCHours() - 1)
+  return slot.toISOString()
+}
+
+function assertUpstream(): void {
+  if (!PUBLISHER_URL) throw new Error("SURGE_PUBLISHER_URL is required")
+  const url = new URL(PUBLISHER_URL)
+  if (
+    !ALLOWED_API_HOSTS.has(url.hostname.toLowerCase()) ||
+    !["http:", "https:"].includes(url.protocol)
+  ) {
+    throw new Error(`SURGE_PUBLISHER_URL host is not allowed: ${url.hostname}`)
+  }
+  if (
+    url.pathname !== "/" ||
+    url.search ||
+    url.hash ||
+    url.username ||
+    url.password
+  ) {
+    throw new Error(
+      "SURGE_PUBLISHER_URL must be an origin with no path, query, or credentials",
+    )
+  }
+}
+
+async function fetchLedgerBatch(
+  scheduledForUtc: string,
+  checkedAtMs: number,
+): Promise<ForecastResponse[]> {
+  if (!PUBLISHER_URL) throw new Error("SURGE_PUBLISHER_URL is required")
+  const query = new URLSearchParams({
+    horizon: String(BAKE_HORIZON),
+    scheduled_for_utc: scheduledForUtc,
+  })
+  const response = await fetch(
+    `${PUBLISHER_URL}/ledger/runs/bake?${query}`,
+    {
+      method: "POST",
+      headers: { "x-surge-ledger-key": LEDGER_KEY ?? "" },
+      cache: "no-store",
+    },
+  )
+  if (!response.ok) throw new Error(`publisher upstream ${response.status}`)
+  if (response.headers.get("x-surge-volume-committed") !== "true") {
+    throw new Error("publisher did not attest a durable Modal Volume commit")
+  }
+  const value = (await response.json()) as LedgerBakeResponse
+  if (
+    value.schema_version !== "2.0" ||
+    value.run_published !== true ||
+    value.committed_regions !== RTO_CODES.length ||
+    !Array.isArray(value.forecasts) ||
+    value.forecasts.length !== RTO_CODES.length ||
+    value.run.scheduled_for_utc !== scheduledForUtc
+  ) {
+    throw new Error("publisher returned an incomplete run")
+  }
+  const runPublishedAt = parseUtc(
+    value.run.published_at_utc,
+    "run published_at_utc",
+  )
+  if (runPublishedAt > Date.now() + MAX_CLOCK_SKEW_MS) {
+    throw new Error("publisher run timestamp is unexpectedly in the future")
+  }
+  const byBa = new Map(value.forecasts.map((forecast) => [forecast.ba, forecast]))
+  const ordered = RTO_CODES.map((ba) => {
+    const forecast = byBa.get(ba)
+    if (!forecast) throw new Error(`${ba}: publisher omitted forecast`)
+    const validated = validateForecast(forecast, ba, scheduledForUtc, checkedAtMs)
+    if (
+      validated.run_id !== value.run.run_id ||
+      value.run.issuance_ids[ba] !== validated.issuance_id ||
+      validated.published_at_utc !== value.run.published_at_utc
+    ) {
+      throw new Error(`${ba}: publisher run marker disagrees with issuance`)
+    }
+    return validated
+  })
+  if (
+    value.run.required_bas.length !== RTO_CODES.length ||
+    RTO_CODES.some((ba) => !value.run.required_bas.includes(ba))
+  ) {
+    throw new Error("publisher run marker has the wrong required BA set")
+  }
+  return ordered
+}
+
+async function putJson(
+  pathname: string,
+  value: unknown,
+  options: { allowOverwrite: boolean },
+): Promise<string> {
+  if (!BLOB_TOKEN) throw new Error("BLOB_READ_WRITE_TOKEN not configured")
+  const body = JSON.stringify(value)
+  const blob = await put(pathname, body, {
+    access: "private",
+    token: BLOB_TOKEN,
+    contentType: "application/json",
+    addRandomSuffix: false,
+    allowOverwrite: options.allowOverwrite,
+    cacheControlMaxAge: 300,
+  })
+  return blob.url
+}
+
+async function putImmutableJson(pathname: string, value: unknown): Promise<string> {
+  if (!BLOB_TOKEN) throw new Error("BLOB_READ_WRITE_TOKEN not configured")
+  const expected = JSON.stringify(value)
+  try {
+    const existing = await head(pathname, { token: BLOB_TOKEN })
+    const response = await fetch(existing.url, {
+      headers: { authorization: `Bearer ${BLOB_TOKEN}` },
+      cache: "no-store",
+    })
+    if (!response.ok || (await response.text()) !== expected) {
+      throw new Error(`immutable blob conflict at ${pathname}`)
+    }
+    return existing.url
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("immutable blob conflict")) {
+      throw error
+    }
+  }
+  return putJson(pathname, value, { allowOverwrite: false })
+}
+
+async function assertCurrentPointer(
+  expected: { run_id: string },
+): Promise<void> {
+  if (!BLOB_TOKEN) throw new Error("BLOB_READ_WRITE_TOKEN not configured")
+  const metadata = await head("forecasts/v2/current.json", { token: BLOB_TOKEN })
+  const freshUrl = new URL(metadata.url)
+  // The stable pointer URL may still have the preceding version in a CDN
+  // cache. A per-run query key plus no-store makes this a real release
+  // assertion rather than a check of the prior bake.
+  freshUrl.searchParams.set("surge_release", expected.run_id)
+  const response = await fetch(freshUrl, {
+    headers: { authorization: `Bearer ${BLOB_TOKEN}` },
+    cache: "no-store",
+  })
+  if (!response.ok) throw new Error(`current pointer read ${response.status}`)
+  const actual = (await response.json()) as { run_id?: string }
+  if (actual.run_id !== expected.run_id) {
+    throw new Error("current pointer read-after-write did not expose the published run")
+  }
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
-  if (!BAKE_SECRET) {
-    return Response.json({ error: "BAKE_SECRET not set on server" }, { status: 500 })
-  }
-  if (!BLOB_TOKEN) {
+  if (!BAKE_SECRET || !BLOB_TOKEN || !LEDGER_KEY) {
     return Response.json(
-      { error: "BLOB_READ_WRITE_TOKEN not set on server" },
+      { error: "BAKE_SECRET, BLOB_READ_WRITE_TOKEN, and SURGE_LEDGER_KEY are required" },
       { status: 500 },
     )
   }
-  // Constant-time-ish compare: Bearer token auth. Anyone who can POST here
-  // can trigger a bake, which hits Modal 53× and burns a small amount of
-  // compute — not free, so gate it.
   const auth = req.headers.get("authorization") ?? ""
-  const provided = auth.startsWith("Bearer ") ? auth.slice(7) : ""
-  if (provided !== BAKE_SECRET) {
+  if (auth !== `Bearer ${BAKE_SECRET}`) {
     return Response.json({ error: "unauthorized" }, { status: 401 })
+  }
+  try {
+    assertUpstream()
+  } catch (error) {
+    return Response.json({ error: String(error) }, { status: 500 })
   }
 
   const started = Date.now()
-  const results: Array<{ ba: string; ok: boolean; url?: string; error?: string }> = []
-  const manifest: Record<string, { url: string; as_of_utc: string }> = {}
-  // Keep successful forecast payloads so we can also write a single
-  // consolidated forecasts/all.json below — powers the /grid page with one
-  // blob read instead of 53.
-  const forecasts: ForecastResponse[] = []
-
-  await withConcurrency(BAS, CONCURRENCY, async (ba) => {
-    try {
-      const forecast = await fetchOneForecast(ba)
-      const blob = await put(
-        `forecasts/${ba}.json`,
-        JSON.stringify(forecast),
-        {
-          // The surge-blob store is configured private, so blobs are served
-          // via signed URLs only. The /api/forecast reader proxies the fetch
-          // server-side with the read-write token — browsers never see the URL.
-          access: "private",
-          token: BLOB_TOKEN,
-          contentType: "application/json",
-          // Stable paths — overwrite yesterday's forecast rather than
-          // accumulating files. addRandomSuffix would give each bake a
-          // unique URL (wrong for our "latest-wins" semantics).
-          addRandomSuffix: false,
-          allowOverwrite: true,
-          // Edge cache for 30 min; the underlying data only turns over
-          // once/day, and stale-while-revalidate is handled by the API
-          // route reading this.
-          cacheControlMaxAge: 1800,
-        },
-      )
-      manifest[ba] = { url: blob.url, as_of_utc: forecast.as_of_utc }
-      forecasts.push(forecast)
-      results.push({ ba, ok: true, url: blob.url })
-    } catch (e) {
-      results.push({ ba, ok: false, error: String(e) })
-    }
-  })
-
-  // Single consolidated manifest so readers can discover the per-BA URLs
-  // without maintaining a client-side list. One more blob write, trivial.
-  let manifestUrl: string | undefined
+  const scheduledForUtc = scheduledSlot(new Date(started))
+  let ordered: ForecastResponse[]
   try {
-    const m = await put(
-      "forecasts/manifest.json",
-      JSON.stringify({
-        baked_at: new Date().toISOString(),
-        horizon: BAKE_HORIZON,
-        entries: manifest,
-      }),
+    ordered = await fetchLedgerBatch(scheduledForUtc, started)
+  } catch (error) {
+    return Response.json(
       {
-        access: "private",
-        token: BLOB_TOKEN,
-        contentType: "application/json",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        cacheControlMaxAge: 1800,
+        published: false,
+        scheduled_for_utc: scheduledForUtc,
+        expected: RTO_CODES.length,
+        forecast_ok: 0,
+        forecast_fail: RTO_CODES.length,
+        ok: 0,
+        fail: RTO_CODES.length,
+        elapsed_ms: Date.now() - started,
+        error: String(error),
+        results: RTO_CODES.map((ba) => ({ ba, ok: false, error: String(error) })),
       },
+      { status: 503 },
     )
-    manifestUrl = m.url
-  } catch (e) {
-    results.push({ ba: "__manifest__", ok: false, error: String(e) })
   }
 
-  // Consolidated all-in-one payload for /grid. Ordered by the BAS list so
-  // the client can rely on a deterministic sort when peak_mw-sorting. One
-  // ~800 KB blob replaces 53 × ~15 KB blobs for bulk reads.
-  //
-  // Only overwrite when at least one sub-forecast succeeded — otherwise a
-  // fully-failed bake (e.g. Modal rate-limited) would replace the previous
-  // good all.json with `forecasts: []`, which clients render as an empty
-  // state and the map tooltip shows "loading…" forever. Keeping the
-  // previous blob intact on a bad run lets readers fall back to day-old
-  // data instead of no data.
-  let allUrl: string | undefined
-  if (forecasts.length === 0) {
-    results.push({
-      ba: "__all__",
-      ok: false,
-      error: "skipped: zero successful sub-forecasts; preserving previous all.json",
+  const results: BakeResult[] = ordered.map((forecast) => ({
+    ba: forecast.ba,
+    ok: true,
+    issuance_id: forecast.issuance_id,
+  }))
+  const forecastOk = ordered.length
+  const runIds = new Set(ordered.map((forecast) => forecast.run_id))
+  if (runIds.size !== 1) {
+    return Response.json(
+      { published: false, error: "forecast run IDs do not match", results },
+      { status: 500 },
+    )
+  }
+  const runId = ordered[0].run_id
+  let provenance: RunProvenance
+  try {
+    provenance = assertUniformRunProvenance(ordered)
+  } catch (error) {
+    return Response.json(
+      { published: false, run_id: runId, error: String(error), results },
+      { status: 409 },
+    )
+  }
+  const bakedAt = new Date().toISOString()
+  const allPayload = {
+    schema_version: "2.0",
+    run_id: runId,
+    baked_at: bakedAt,
+    horizon: BAKE_HORIZON,
+    provenance,
+    forecasts: ordered,
+  }
+
+  let immutableAllUrl = ""
+  let manifestUrl = ""
+  let currentUrl = ""
+  let pointerAdvanced = false
+  try {
+    const entries: Record<string, { issuance_id: string; url: string }> = {}
+    for (const forecast of ordered) {
+      const path = `forecasts/v2/runs/${runId}/${forecast.ba}.json`
+      const url = await putImmutableJson(path, forecast)
+      entries[forecast.ba] = { issuance_id: forecast.issuance_id, url }
+    }
+    immutableAllUrl = await putImmutableJson(
+      `forecasts/v2/runs/${runId}/all.json`,
+      allPayload,
+    )
+    const manifest = {
+      schema_version: "2.0",
+      run_id: runId,
+      scheduled_for_utc: scheduledForUtc,
+      published_at_utc: bakedAt,
+      expected_regions: RTO_CODES.length,
+      provenance,
+      entries,
+      all_url: immutableAllUrl,
+    }
+    manifestUrl = await putImmutableJson(
+      `forecasts/v2/runs/${runId}/manifest.json`,
+      manifest,
+    )
+    const currentPointer = {
+      schema_version: "2.0",
+      run_id: runId,
+      published_at_utc: bakedAt,
+      manifest_url: manifestUrl,
+      all_url: immutableAllUrl,
+    }
+    currentUrl = await putJson(
+      "forecasts/v2/current.json",
+      currentPointer,
+      { allowOverwrite: true },
+    )
+    pointerAdvanced = true
+    await assertCurrentPointer(currentPointer)
+  } catch (error) {
+    return Response.json(
+      {
+        published: pointerAdvanced,
+        run_id: runId,
+        expected: RTO_CODES.length,
+        forecast_ok: forecastOk,
+        forecast_fail: 0,
+        error: String(error),
+        publication_boundary: pointerAdvanced ? "advanced-unverified" : "not-advanced",
+        elapsed_ms: Date.now() - started,
+        results,
+      },
+      { status: 500 },
+    )
+  }
+
+  // Compatibility mirrors are explicitly downstream of the v2 publication
+  // boundary. Their failure cannot roll back or contradict current.json.
+  const mirrorErrors: string[] = []
+  for (const forecast of ordered) {
+    try {
+      await putJson(`forecasts/${forecast.ba}.json`, forecast, {
+        allowOverwrite: true,
+      })
+    } catch (error) {
+      mirrorErrors.push(`${forecast.ba}: ${String(error)}`)
+    }
+  }
+  let legacyAllUrl: string | null = null
+  try {
+    legacyAllUrl = await putJson("forecasts/all.json", allPayload, {
+      allowOverwrite: true,
     })
-  } else try {
-    const byBa = new Map(forecasts.map((f) => [f.ba, f]))
-    const ordered = BAS.map((b) => byBa.get(b)).filter(
-      (f): f is ForecastResponse => f !== undefined,
-    )
-    const a = await put(
-      "forecasts/all.json",
-      JSON.stringify({
-        baked_at: new Date().toISOString(),
-        horizon: BAKE_HORIZON,
-        forecasts: ordered,
-      }),
-      {
-        access: "private",
-        token: BLOB_TOKEN,
-        contentType: "application/json",
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        cacheControlMaxAge: 1800,
-      },
-    )
-    allUrl = a.url
-  } catch (e) {
-    results.push({ ba: "__all__", ok: false, error: String(e) })
+  } catch (error) {
+    mirrorErrors.push(`all: ${String(error)}`)
   }
 
-  const ok = results.filter((r) => r.ok).length
-  const fail = results.length - ok
   return Response.json(
     {
-      elapsed_ms: Date.now() - started,
-      ok,
-      fail,
+      published: true,
+      run_id: runId,
+      scheduled_for_utc: scheduledForUtc,
+      expected: RTO_CODES.length,
+      forecast_ok: forecastOk,
+      forecast_fail: 0,
+      ok: forecastOk,
+      fail: 0,
       manifest_url: manifestUrl,
-      all_url: allUrl,
+      all_url: immutableAllUrl,
+      legacy_all_url: legacyAllUrl,
+      current_url: currentUrl,
+      read_after_write_verified: true,
+      compatibility_mirror_errors: mirrorErrors,
+      elapsed_ms: Date.now() - started,
       results,
     },
-    { status: fail === 0 ? 200 : 207 }, // 207 Multi-Status on partial failure
+    { status: 200 },
   )
 }

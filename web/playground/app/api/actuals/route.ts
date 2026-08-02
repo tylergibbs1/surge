@@ -11,9 +11,10 @@ import { BAS } from "@/lib/us-grid-geo"
 
 const API =
   process.env.SURGE_API_URL ??
-  "https://tylergibbs1--surge-api-fastapi-app.modal.run"
+  "https://tylergibbs1--surge-api-v02-fastapi-app.modal.run"
 
 const ALLOWED_UPSTREAM_HOSTS = new Set([
+  "tylergibbs1--surge-api-v02-fastapi-app.modal.run",
   "tylergibbs1--surge-api-fastapi-app.modal.run",
   "api.runpod.ai",
   "127.0.0.1",
@@ -23,6 +24,9 @@ const ALLOWED_UPSTREAM_HOSTS = new Set([
   const u = new URL(API)
   if (!ALLOWED_UPSTREAM_HOSTS.has(u.hostname)) {
     throw new Error(`upstream host ${u.hostname} not in allow-list`)
+  }
+  if (u.pathname !== "/" || u.search || u.hash || u.username || u.password) {
+    throw new Error("upstream must be an origin without path, query, or credentials")
   }
 })()
 

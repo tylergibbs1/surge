@@ -298,8 +298,8 @@ export function ForecastChart({
   // comparison is the whole point. Users who find it distracting can
   // toggle it off per-session.
   const [showEiaDf, setShowEiaDf] = useState(true)
-  // Temperature small-multiple is on by default when the API ships temp_c
-  // (7 RTO BAs today); off-switch is per-session, same pattern as EIA DF.
+  // temp_c is a nullable legacy compatibility field. load-v2-core leaves it
+  // null because it has no forecast-time weather input.
   const [showTemp, setShowTemp] = useState(true)
 
   // All heavy derivations live in useMemo so the 60-second now-tick just
@@ -310,14 +310,9 @@ export function ForecastChart({
     [forecast, actuals, eiaDf, ba],
   )
   const tempRows = useMemo(() => buildTempRows(forecast), [forecast])
-  // The backend (forecaster.py) fills future temperature with the last
-  // observed ASOS value — a single scalar repeated across `horizon`
-  // steps. That renders as a dead-flat line which reads as "surge is
-  // forecasting 28°C forever" when it actually means "model has no
-  // weather forecast input, held constant." Detect that case and swap
-  // the chart for an honest inline chip. When HRRR/GFS eventually wires
-  // up as a future covariate this threshold will trip the "varying"
-  // branch automatically.
+  // Detect old payloads that carried a repeated assumed temperature so the
+  // compatibility explorer labels them explicitly instead of implying a
+  // real weather forecast. A future NWP-vintage feature spec would vary.
   const tempInfo = useMemo(() => {
     if (tempRows.length === 0) return { kind: "absent" as const }
     let lo = Infinity
@@ -457,7 +452,7 @@ export function ForecastChart({
         ) : tempInfo.kind === "constant" ? (
           <span
             className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md bg-foreground/[0.03] px-2 py-1 uppercase tracking-wider ring-1 ring-foreground/5"
-            title="The model uses ASOS temperature as a covariate but has no weather forecast input — future temperature is held at the last observed value."
+            title="Legacy payload: repeated assumed temperature. The v0.2 load-v2-core contract leaves future temperature null."
           >
             <span
               aria-hidden="true"
@@ -465,7 +460,7 @@ export function ForecastChart({
               style={{ backgroundColor: "var(--color-temp)", opacity: 0.6 }}
             />
             <span className="tabular-nums normal-case">
-              Temp held at {tempInfo.value.toFixed(0)}°C
+              Legacy temp {tempInfo.value.toFixed(0)}°C
             </span>
           </span>
         ) : null}
@@ -674,9 +669,9 @@ export function ForecastChart({
       {/* Temperature small multiple — aligned x-axis via syncId so the
           tooltip crosshair moves in lockstep. Sits below the load panel
           rather than sharing a right-side y-axis (dual axes are bad).
-          Only renders when the series actually varies; the backend
-          currently holds future temp constant (flat line), which we
-          surface as a chip instead of a misleading chart. */}
+          Only renders when a payload supplies a varying forecast-vintage
+          series. load-v2-core supplies none; old constant assumptions are
+          labeled as legacy above. */}
       {hasTempSeries && showTemp ? (
         <ChartContainer config={chartConfig} className="h-[90px] w-full">
           <ComposedChart

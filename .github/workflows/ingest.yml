@@ -1,24 +1,24 @@
-name: ingest
+name: EIA source canary
+
 on:
   schedule:
-    - cron: "15 * * * *"  # every hour at :15
+    - cron: "15 * * * *"
   workflow_dispatch:
+
+concurrency:
+  group: eia-source-canary
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  refresh:
+  source-canary:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      # GitHub's shared runner IPs are shared with other tenants, and Iowa
-      # Mesonet rate-limits aggressively on shared egress. Weather is
-      # therefore best-effort; load (EIA-930) is required.
-      # Note: `runner.temp` isn't resolvable at job-level env; use the
-      # $RUNNER_TEMP env var that GitHub-hosted runners always set.
       EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
-      SURGE_DATA_DIR: ${{ github.workspace }}/surge-data
+      SURGE_DATA_DIR: ${{ github.workspace }}/surge-canary-data
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,27 +26,93 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Validate required secrets
+      - name: Validate required secret
         run: |
           if [ -z "$EIA_API_KEY" ]; then
-            echo "::error::EIA_API_KEY secret is not set. Add it at Settings → Secrets → Actions." >&2
+            echo "::error::EIA_API_KEY is not configured."
             exit 1
           fi
 
-      - run: pip install -e .
+      - run: python -m pip install -e .
 
-      - name: Refresh load (EIA-930, required)
-        run: python -m surge.ingest --days 7 --skip-weather
+      - name: Exercise EIA ingestion
+        run: |
+          python -m surge.ingest \
+            --bas PJM CISO ERCO MISO NYIS ISNE SWPP \
+            --days 7 \
+            --skip-weather
 
-      # Weather is deliberately NOT fetched from GitHub Actions — Iowa
-      # Mesonet rate-limits the shared GH runner IP pool hard enough that
-      # a 53-BA refresh reliably blows the job timeout. Weather ingests
-      # happen from the RunPod / Modal side instead (their IPs aren't
-      # rate-limited), and this workflow just keeps load current.
+      - name: Assert source coverage and freshness
+        run: |
+          python - <<'PY'
+          from datetime import UTC, datetime, timedelta
 
-      - name: Upload refreshed parquet
-        uses: actions/upload-artifact@v4
-        with:
-          name: surge-data
-          path: ${{ github.workspace }}/surge-data
-          retention-days: 14
+          import polars as pl
+
+          from surge import bas, store
+
+          frame = store.scan(
+              "load_hourly", dedupe_on=["ts_utc", "ba"]
+          ).select("ts_utc", "ba", "load_mw").collect()
+          if frame.is_empty():
+              raise SystemExit("EIA source canary wrote zero rows")
+
+          latest = frame["ts_utc"].max()
+          now = datetime.now(tz=UTC)
+          if latest is None:
+              raise SystemExit("EIA source canary has no latest timestamp")
+          if latest > now + timedelta(hours=2):
+              raise SystemExit(f"EIA source timestamp is unexpectedly in the future: {latest}")
+          age = now - latest
+          if age > timedelta(hours=12):
+              raise SystemExit(f"EIA source is stale: latest={latest.isoformat()} age={age}")
+
+          expected = set(bas.rto_codes())
+          required = frame.filter(pl.col("ba").is_in(sorted(expected)))
+          quality = required.group_by("ba").agg(
+              pl.col("ts_utc")
+              .filter(pl.col("load_mw").is_not_null())
+              .max()
+              .alias("latest_usable"),
+          )
+          observed = set(quality["ba"].to_list())
+          missing = sorted(expected - observed)
+          if missing:
+              raise SystemExit(f"EIA source is missing trust-ledger RTOs: {','.join(missing)}")
+          unusable = sorted(
+              row["ba"]
+              for row in quality.iter_rows(named=True)
+              if row["latest_usable"] is None
+          )
+          if unusable:
+              raise SystemExit(
+                  "EIA source has no non-null demand for: " + ",".join(unusable)
+              )
+          stale = sorted(
+              row["ba"]
+              for row in quality.iter_rows(named=True)
+              if row["latest_usable"] is not None
+              and row["latest_usable"] < now - timedelta(hours=12)
+          )
+          if stale:
+              raise SystemExit(f"EIA source has stale trust-ledger RTOs: {','.join(stale)}")
+          future = sorted(
+              row["ba"]
+              for row in quality.iter_rows(named=True)
+              if row["latest_usable"] is not None
+              and row["latest_usable"] > now + timedelta(hours=2)
+          )
+          if future:
+              raise SystemExit(
+                  "EIA source has future-dated trust-ledger RTOs: " + ",".join(future)
+              )
+
+          print(
+              f"EIA source healthy: rows={frame.height} required_bas={len(observed)} "
+              f"latest={latest.isoformat()} age={age}"
+          )
+          PY
+
+      # This job is diagnostic only. Production reads the Modal volume; the
+      # runner's temporary parquet data is intentionally not uploaded as a
+      # misleading short-lived backup.

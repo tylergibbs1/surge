@@ -13,28 +13,31 @@ Run:
 
 Env:
     SURGE_DATA_DIR       default ~/.surge/data
-    SURGE_MODEL_PATH     default <repo>/models/chronos2_full_v2
+    SURGE_MODEL_PATH     default amazon/chronos-2
+    SURGE_MODEL_REVISION pinned for the default model; otherwise required
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from surge import __version__
+from surge import __version__, ledger, store, verification
 from surge import bas as _bas
-from surge.api import forecaster, live_load
+from surge.api import forecaster, ledger_api, live_load
 from surge.api.schemas import (
     SUPPORTED_BAS,
     ActualPoint,
@@ -42,31 +45,43 @@ from surge.api.schemas import (
     BAListResponse,
     BAMeta,
     CurrentLoadResponse,
-    ForecastPoint,
     ForecastResponse,
     HealthResponse,
+    LedgerBakeResponse,
+    LedgerForecastListResponse,
+    LedgerRunResponse,
+    LedgerScoreboardResponse,
+    LiveResponse,
+    ScoreSummaryResponse,
 )
 
 log = logging.getLogger("surge.api")
+
+RTO_BAS = ledger.REQUIRED_RTO_BAS
+MAX_RELEASE_SLOT_AGE = timedelta(minutes=90)
+DATA_WARN_AFTER = timedelta(hours=float(os.environ.get("SURGE_DATA_WARN_HOURS", "6")))
+DATA_CRITICAL_AFTER = timedelta(hours=float(os.environ.get("SURGE_DATA_CRITICAL_HOURS", "12")))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Load the Chronos-2 pipeline once at startup, release at shutdown."""
     import torch
-    from chronos import BaseChronosPipeline
 
-    device = "cuda" if torch.cuda.is_available() else (
-        "mps" if torch.backends.mps.is_available() else "cpu"
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else ("mps" if torch.backends.mps.is_available() else "cpu")
     )
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
     log.info("loading %s on %s / %s", forecaster.MODEL_PATH, device, dtype)
-    # When MODEL_PATH is an HF repo id (not a local path) we also pin a
-    # specific revision — see forecaster.MODEL_REVISION for rationale.
-    load_kwargs: dict = {"device_map": device, "torch_dtype": dtype}
-    if "/" in forecaster.MODEL_PATH and not forecaster.MODEL_PATH.startswith("/"):
-        load_kwargs["revision"] = forecaster.MODEL_REVISION
-    pipe = BaseChronosPipeline.from_pretrained(forecaster.MODEL_PATH, **load_kwargs)
+    load_kwargs: dict = {"device_map": device, "dtype": dtype}
+    load_revision = forecaster.model_load_revision()
+    if load_revision is not None:
+        load_kwargs["revision"] = load_revision
+    from surge.model_loader import load_chronos2
+
+    pipe = load_chronos2(forecaster.MODEL_PATH, **load_kwargs)
     app.state.pipe = pipe
     app.state.model_name = forecaster.MODEL_NAME
     app.state.device = device
@@ -101,13 +116,13 @@ ALLOWED_ORIGINS = (
 limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
 
 app = FastAPI(
-    title="Surge — open forecasts for the US power grid",
+    title="Surge Grid — open, auditable forecasts for the US power grid",
     version=__version__,
     description=(
         f"Open, probabilistic day-ahead load forecasts for {len(SUPPORTED_BAS)} "
         "US balancing authorities (every EIA-930 BA with a demand series). "
-        "Model: Chronos-2 fine-tuned on 7 years of EIA-930 load, ASOS hourly "
-        "temperatures, and US calendar features. "
+        "Every committed forecast records its input cutoff, exact model and code "
+        "revision, feature specification, quantiles, and immutable issuance ID. "
         "For research and reference use only — not for trading or bankable decisions."
     ),
     lifespan=lifespan,
@@ -135,7 +150,7 @@ PipeDep = Annotated[Any, Depends(get_pipe)]
 @app.get("/", tags=["meta"])
 def root() -> dict:
     return {
-        "name": "surge",
+        "name": "surge-grid",
         "version": __version__,
         "model": forecaster.MODEL_NAME,
         "docs_url": "/docs",
@@ -143,15 +158,90 @@ def root() -> dict:
     }
 
 
-@app.get("/health", response_model=HealthResponse, tags=["meta"])
-def health(request: Request) -> HealthResponse:
+def _health_payload(request: Request) -> HealthResponse:
+    now = datetime.now(tz=UTC)
     pipe = getattr(request.app.state, "pipe", None)
+    source_watermarks = forecaster.data_watermarks_utc()
+    available_watermarks = [value for value in source_watermarks.values() if value is not None]
+    data_end = min(available_watermarks) if available_watermarks else None
+    source_ages: dict[str, float | None] = {
+        source: (
+            None
+            if watermark is None
+            else max(now - watermark, timedelta(0)).total_seconds() / 3600.0
+        )
+        for source, watermark in source_watermarks.items()
+    }
+    reasons: list[str] = []
+    data_age_hours: float | None = None
+    if pipe is None:
+        status = "loading"
+        reasons.append("model is not loaded")
+    elif any(value is None for value in source_watermarks.values()):
+        status = "error"
+        missing = [source for source, value in source_watermarks.items() if value is None]
+        reasons.append(f"required data unavailable: {', '.join(missing)}")
+    else:
+        assert data_end is not None
+        age = max(now - data_end, timedelta(0))
+        data_age_hours = age.total_seconds() / 3600.0
+        stalest_source = max(
+            source_ages,
+            key=lambda source: source_ages[source] if source_ages[source] is not None else -1,
+        )
+        if age > DATA_CRITICAL_AFTER:
+            status = "error"
+            reasons.append(f"{stalest_source} is critically stale ({data_age_hours:.1f} hours old)")
+        elif age > DATA_WARN_AFTER:
+            status = "degraded"
+            reasons.append(f"{stalest_source} is delayed ({data_age_hours:.1f} hours old)")
+        else:
+            status = "ok"
+
+    try:
+        recent = ledger.list_forecasts(mode=ledger.ForecastMode.LIVE, limit=1)
+        latest_issuance = recent[0].issued_at_utc if recent else None
+    except Exception:
+        latest_issuance = None
+        reasons.append("forecast ledger could not be read")
+        if status == "ok":
+            status = "degraded"
+
     return HealthResponse(
-        status="ok" if pipe is not None else "loading",
+        checked_at_utc=now,
+        status=status,
         model_loaded=pipe is not None,
         model_name=getattr(request.app.state, "model_name", None) if pipe else None,
-        data_end_utc=forecaster.data_end_utc(),
+        model_revision=forecaster.MODEL_REVISION if pipe else None,
+        data_end_utc=data_end,
+        data_age_hours=data_age_hours,
+        source_watermarks_utc=source_watermarks,
+        source_age_hours=source_ages,
+        latest_issuance_utc=latest_issuance,
+        reasons=reasons,
     )
+
+
+@app.get("/live", response_model=LiveResponse, tags=["meta"])
+def live() -> LiveResponse:
+    """Process liveness only; this does not claim model or data readiness."""
+    return LiveResponse(checked_at_utc=datetime.now(tz=UTC))
+
+
+@app.get("/ready", response_model=HealthResponse, tags=["meta"])
+def ready(request: Request, response: Response) -> HealthResponse:
+    payload = _health_payload(request)
+    if payload.status in {"error", "loading"}:
+        response.status_code = 503
+    return payload
+
+
+@app.get("/health", response_model=HealthResponse, tags=["meta"])
+def health(request: Request, response: Response) -> HealthResponse:
+    payload = _health_payload(request)
+    if payload.status in {"error", "loading"}:
+        response.status_code = 503
+    return payload
 
 
 @app.get("/current-load", response_model=CurrentLoadResponse, tags=["meta"])
@@ -273,15 +363,309 @@ def bas(include_gen_only: bool = False) -> BAListResponse:
     return BAListResponse(bas=codes, count=len(codes), metadata=metadata)
 
 
-def _build_response(ba: str, horizon: int, result: dict, model_name: str) -> ForecastResponse:
-    return ForecastResponse(
+@app.get(
+    "/ledger/scoreboard",
+    response_model=LedgerScoreboardResponse,
+    tags=["ledger"],
+)
+def ledger_scoreboard() -> LedgerScoreboardResponse:
+    """Latest atomically published live run and settled score for each major RTO."""
+    return ledger_api.build_scoreboard(list(RTO_BAS))
+
+
+@app.get(
+    "/ledger/issuances",
+    response_model=LedgerForecastListResponse,
+    tags=["ledger"],
+)
+@limiter.limit("30/minute")
+def ledger_issuances(
+    request: Request,
+    ba: str | None = None,
+    mode: str | None = "live",
+    limit: int = Query(default=100, ge=1, le=100),
+) -> LedgerForecastListResponse:
+    try:
+        parsed_mode = ledger.ForecastMode(mode) if mode is not None else None
+        records = ledger.list_forecasts(ba=ba, mode=parsed_mode, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    forecasts = [ledger_api.summary_from_record(record) for record in records]
+    return LedgerForecastListResponse(forecasts=forecasts, count=len(forecasts))
+
+
+@app.post(
+    "/ledger/runs/{run_id}/publish",
+    response_model=LedgerRunResponse,
+    tags=["ledger"],
+)
+def publish_ledger_run(run_id: str, request: Request) -> LedgerRunResponse:
+    """Idempotently publish a staged run after all seven RTOs pass validation."""
+    _authorize_ledger_commit(request)
+    try:
+        marker = ledger.publish_run_if_complete(run_id)
+    except (store.ImmutableConflictError, ValueError):
+        raise HTTPException(
+            status_code=409,
+            detail="staged run failed complete-run validation",
+        ) from None
+    if marker is None:
+        raise HTTPException(
+            status_code=409,
+            detail="staged run does not contain all seven required RTO issuances",
+        )
+    return ledger_api.run_response(marker)
+
+
+@app.get(
+    "/ledger/issuances/{issuance_id}",
+    response_model=ForecastResponse,
+    tags=["ledger"],
+)
+def ledger_issuance(issuance_id: str) -> ForecastResponse:
+    try:
+        record = ledger.get_forecast(issuance_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="issuance not found") from None
+    return ledger_api.response_from_record(record)
+
+
+@app.get(
+    "/ledger/issuances/{issuance_id}/score",
+    response_model=ScoreSummaryResponse,
+    tags=["ledger"],
+)
+def ledger_issuance_score(issuance_id: str) -> ScoreSummaryResponse:
+    try:
+        score = verification.score_forecast(issuance_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="issuance not found") from None
+    except ValueError:
+        raise HTTPException(status_code=404, detail="issuance has no settled score") from None
+    return ScoreSummaryResponse(**score.model_dump())
+
+
+def _scheduled_slot(issued_at_utc: datetime, requested: datetime | None) -> datetime:
+    if requested is None:
+        return issued_at_utc.replace(minute=0, second=0, microsecond=0)
+    if requested.tzinfo is None or requested.utcoffset() is None:
+        raise ValueError("scheduled_for_utc must be timezone-aware")
+    scheduled = requested.astimezone(UTC)
+    if scheduled > issued_at_utc + timedelta(minutes=5):
+        raise ValueError("scheduled_for_utc cannot be in the future")
+    return scheduled
+
+
+def _record_from_result(
+    ba: str,
+    result: dict[str, Any],
+    model_name: str,
+    *,
+    scheduled_for_utc: datetime | None,
+) -> ledger.ForecastRecord:
+    issued_at = result["issued_at_utc"]
+    provenance = result.get("provenance", {})
+    warnings = list(result.get("warnings", []))
+    if model_name == "surge-fm-v3":
+        warnings.append(
+            "surge-fm-v3 has legacy training provenance; this live issuance is "
+            "point-in-time safe but must not be blended with its oracle-covariate backtest"
+        )
+    code_revision = str(provenance.get("code_revision") or forecaster.CODE_REVISION)
+    if code_revision == "unknown":
+        warnings.append("code revision was not configured")
+    point_kind = result.get("point_estimate_kind", "median")
+    if point_kind == "p50":
+        point_kind = "median"
+
+    return ledger.ForecastRecord(
         ba=ba,
-        model=model_name,
-        as_of_utc=datetime.now(tz=UTC),
+        mode=ledger.ForecastMode.LIVE,
+        scheduled_for_utc=_scheduled_slot(issued_at, scheduled_for_utc),
+        feature_cutoff_utc=result["feature_cutoff_utc"],
+        issued_at_utc=issued_at,
         context_start_utc=result["context_start_utc"],
         context_end_utc=result["context_end_utc"],
-        horizon=horizon,
-        points=[ForecastPoint(**p) for p in result["points"]],
+        model_name=model_name,
+        model_revision=str(provenance.get("model_revision") or forecaster.MODEL_REVISION),
+        model_artifact_sha256=provenance.get("model_artifact_sha256"),
+        code_revision=code_revision,
+        feature_spec_version=result["feature_spec_version"],
+        feature_spec_sha256=result["feature_spec_sha256"],
+        feature_snapshot_sha256=result["feature_snapshot_sha256"],
+        availability_mode=ledger.AvailabilityMode(result["availability_mode"]),
+        point_estimate_kind=ledger.PointEstimateKind(point_kind),
+        mase_scale_24=float(result["mase_scale_24"]),
+        warnings=tuple(dict.fromkeys(warnings)),
+        points=tuple(
+            ledger.ForecastPointRecord(
+                valid_at_utc=point.get("valid_at_utc", point["ts_utc"]),
+                mean_mw=point["mean_mw"],
+                p10_mw=point["p10_mw"],
+                p50_mw=point.get("p50_mw", point["median_mw"]),
+                p90_mw=point["p90_mw"],
+                future_temp_c=point.get("future_temp_c"),
+                future_temp_vintage_id=point.get("future_temp_vintage_id"),
+            )
+            for point in result["points"]
+        ),
+    )
+
+
+def _build_response(
+    ba: str,
+    result: dict[str, Any],
+    model_name: str,
+    *,
+    scheduled_for_utc: datetime | None = None,
+) -> tuple[ledger.ForecastRecord, ForecastResponse]:
+    record = _record_from_result(
+        ba,
+        result,
+        model_name,
+        scheduled_for_utc=scheduled_for_utc,
+    )
+    return record, ledger_api.response_from_record(record, committed=False)
+
+
+def _authorize_ledger_commit(request: Request) -> None:
+    expected = os.environ.get("SURGE_LEDGER_KEY", "")
+    if not expected:
+        raise HTTPException(status_code=503, detail="ledger commits are not configured")
+    provided = request.headers.get("x-surge-ledger-key", "")
+    if not provided or not secrets.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="invalid ledger commit key")
+
+
+def _existing_scheduled_forecast(
+    ba: str,
+    scheduled_for_utc: datetime,
+    horizon: int,
+    model_name: str,
+) -> ledger.ForecastRecord | None:
+    """Return a committed retry target before paying for model inference."""
+    for record in ledger.list_forecasts(
+        ba=ba,
+        mode=ledger.ForecastMode.LIVE,
+        limit=100,
+        include_unpublished=True,
+    ):
+        if (
+            record.scheduled_for_utc == scheduled_for_utc
+            and record.model_name == model_name
+            and record.model_revision == forecaster.MODEL_REVISION
+            and record.model_artifact_sha256 == forecaster.model_artifact_identity()
+            and record.code_revision == forecaster.CODE_REVISION
+            and record.feature_spec_version == forecaster.LOAD_V2_CORE.version
+            and record.feature_spec_sha256 == forecaster.LOAD_V2_CORE.sha256
+            and record.horizon_hours == horizon
+        ):
+            # Re-running the exact staged write also repairs the narrow crash
+            # window between the seventh issuance and its complete-run marker.
+            ledger.commit_forecast(record)
+            return record
+    return None
+
+
+def _release_slot(issued_at_utc: datetime, requested: datetime | None) -> datetime:
+    scheduled = _scheduled_slot(issued_at_utc, requested)
+    if issued_at_utc - scheduled > MAX_RELEASE_SLOT_AGE:
+        raise ValueError("scheduled_for_utc is too old for a live release")
+    return scheduled
+
+
+@app.post(
+    "/ledger/runs/bake",
+    response_model=LedgerBakeResponse,
+    tags=["ledger"],
+)
+def bake_ledger_run(
+    pipe: PipeDep,
+    request: Request,
+    response: Response,
+    horizon: int = 168,
+    scheduled_for_utc: datetime | None = None,
+) -> LedgerBakeResponse:
+    """Commit and publish one complete seven-RTO run in this request.
+
+    The Modal deployment exposes this route through a publisher function with
+    ``max_containers=1``. Keeping all seven writes and the complete-run marker
+    in one request removes cross-container filesystem locking from the release
+    correctness boundary.
+    """
+    _authorize_ledger_commit(request)
+    if horizon < 1 or horizon > 168:
+        raise HTTPException(status_code=422, detail="horizon must be in 1..168")
+    if not forecaster.model_release_safe():
+        raise HTTPException(
+            status_code=503,
+            detail="configured model has no load-v2-core training contract",
+        )
+
+    issued_at = datetime.now(tz=UTC)
+    try:
+        scheduled_slot = _release_slot(issued_at, scheduled_for_utc)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+
+    try:
+        for ba in RTO_BAS:
+            existing = _existing_scheduled_forecast(
+                ba,
+                scheduled_slot,
+                horizon,
+                request.app.state.model_name,
+            )
+            if existing is not None:
+                continue
+            result = forecaster.forecast_ba(
+                pipe,
+                ba,
+                horizon=horizon,
+                issued_at_utc=issued_at,
+                feature_cutoff_utc=issued_at,
+            )
+            record = _record_from_result(
+                ba,
+                result,
+                request.app.state.model_name,
+                scheduled_for_utc=scheduled_slot,
+            )
+            if record.code_revision == "unknown":
+                raise HTTPException(
+                    status_code=503,
+                    detail="ledger commits require SURGE_CODE_REVISION",
+                )
+            ledger.commit_forecast(record)
+
+        run_id = ledger.deterministic_run_id(ledger.ForecastMode.LIVE, scheduled_slot)
+        marker = ledger.publish_run_if_complete(run_id)
+        if marker is None:
+            raise HTTPException(
+                status_code=409,
+                detail="staged run does not contain all seven required RTO issuances",
+            )
+        records = ledger.forecasts_for_run(marker.run_id)
+    except HTTPException:
+        raise
+    except store.ImmutableConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail="scheduled run already exists with different content",
+        ) from None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid forecast request") from None
+    except Exception:  # pragma: no cover
+        log.exception("seven-RTO ledger bake failed")
+        raise HTTPException(status_code=500, detail="forecast run bake failed") from None
+
+    forecasts = [ledger_api.response_from_record(record) for record in records]
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Surge-Run-ID"] = marker.run_id
+    return LedgerBakeResponse(
+        run=ledger_api.run_response(marker),
+        forecasts=forecasts,
+        committed_regions=len(forecasts),
     )
 
 
@@ -295,10 +679,18 @@ def forecast_all(
     horizon: int = 24,
 ) -> list[ForecastResponse]:
     out: list[ForecastResponse] = []
+    issued_at = datetime.now(tz=UTC)
     for ba in SUPPORTED_BAS:
         try:
-            result = forecaster.forecast_ba(pipe, ba, horizon=horizon)
-            out.append(_build_response(ba, horizon, result, request.app.state.model_name))
+            result = forecaster.forecast_ba(
+                pipe,
+                ba,
+                horizon=horizon,
+                issued_at_utc=issued_at,
+                feature_cutoff_utc=issued_at,
+            )
+            _, response = _build_response(ba, result, request.app.state.model_name)
+            out.append(response)
         except Exception as e:
             log.warning("skipping %s: %s", ba, e)
     return out
@@ -317,12 +709,19 @@ def forecast_stream(
         curl http://localhost:8000/forecast/stream
     """
     model_name = request.app.state.model_name
+    issued_at = datetime.now(tz=UTC)
 
     def gen():
         for ba in SUPPORTED_BAS:
             try:
-                result = forecaster.forecast_ba(pipe, ba, horizon=horizon)
-                resp = _build_response(ba, horizon, result, model_name)
+                result = forecaster.forecast_ba(
+                    pipe,
+                    ba,
+                    horizon=horizon,
+                    issued_at_utc=issued_at,
+                    feature_cutoff_utc=issued_at,
+                )
+                _, resp = _build_response(ba, result, model_name)
                 yield resp.model_dump_json() + "\n"
             except Exception as e:
                 yield json.dumps({"ba": ba, "error": str(e)}) + "\n"
@@ -330,11 +729,20 @@ def forecast_stream(
     return StreamingResponse(gen(), media_type="application/x-ndjson")
 
 
-def _with_cache_headers(r: ForecastResponse, response) -> ForecastResponse:
+def _with_cache_headers(
+    r: ForecastResponse,
+    response: Response,
+    *,
+    committed: bool = False,
+) -> ForecastResponse:
     # 5-minute edge + browser cache. Forecasts refresh hourly via cron, so
     # serving a ≤5-min-stale reply across all readers is fine; dramatically
     # reduces inference load when the link is on HN.
-    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+    response.headers["Cache-Control"] = (
+        "no-store" if committed else "public, max-age=300, s-maxage=300"
+    )
+    if committed:
+        response.headers["X-Surge-Issuance-ID"] = r.issuance_id
     return r
 
 
@@ -346,6 +754,8 @@ def forecast_one(
     request: Request,
     response: Response,
     horizon: int = 24,
+    commit: bool = False,
+    scheduled_for_utc: datetime | None = None,
 ) -> ForecastResponse:
     ba = ba.upper()
     if ba not in SUPPORTED_BAS:
@@ -356,8 +766,57 @@ def forecast_one(
     if horizon < 1 or horizon > 168:
         raise HTTPException(status_code=422, detail="horizon must be in 1..168")
 
+    if commit:
+        _authorize_ledger_commit(request)
+        if not forecaster.model_release_safe():
+            raise HTTPException(
+                status_code=503,
+                detail="configured model has no load-v2-core training contract",
+            )
+    issued_at = datetime.now(tz=UTC)
+    scheduled_slot = _scheduled_slot(issued_at, scheduled_for_utc)
+    if commit:
+        existing = _existing_scheduled_forecast(
+            ba,
+            scheduled_slot,
+            horizon,
+            request.app.state.model_name,
+        )
+        if existing is not None:
+            return _with_cache_headers(
+                ledger_api.response_from_record(existing),
+                response,
+                committed=True,
+            )
     try:
-        result = forecaster.forecast_ba(pipe, ba, horizon=horizon)
+        result = forecaster.forecast_ba(
+            pipe,
+            ba,
+            horizon=horizon,
+            issued_at_utc=issued_at,
+            feature_cutoff_utc=issued_at,
+        )
+        record, payload = _build_response(
+            ba,
+            result,
+            request.app.state.model_name,
+            scheduled_for_utc=scheduled_slot,
+        )
+        if commit:
+            if record.code_revision == "unknown":
+                raise HTTPException(
+                    status_code=503,
+                    detail="ledger commits require SURGE_CODE_REVISION",
+                )
+            ledger.commit_forecast(record)
+            payload = ledger_api.response_from_record(record)
+    except HTTPException:
+        raise
+    except store.ImmutableConflictError:
+        raise HTTPException(
+            status_code=409,
+            detail="scheduled issuance already exists with different content",
+        ) from None
     except ValueError:
         # Deliberately generic — the upstream error may mention paths,
         # column names, or library internals.
@@ -366,6 +825,7 @@ def forecast_one(
         log.exception("forecast failed for %s", ba)
         raise HTTPException(status_code=500, detail="forecast failed") from None
     return _with_cache_headers(
-        _build_response(ba, horizon, result, request.app.state.model_name),
+        payload,
         response,
+        committed=commit,
     )

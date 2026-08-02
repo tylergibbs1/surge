@@ -1,205 +1,186 @@
-# surge
+# Surge Grid
 
-**Open, probabilistic day-ahead load forecasts for the US power grid.**
+**Open, probabilistic load forecasting and auditable grid data for the United States.**
 
-A fine-tuned Chronos-2 foundation model + FastAPI service + hosted
-playground covering every US balancing authority that publishes a demand
-series to EIA-930 — 53 BAs spanning the Eastern, Western, and Texas
-interconnections. Public data only, one-command deploy, permissive license.
+Surge Grid combines a Python data library, a Chronos-2 forecast service, and a
+web playground spanning the 53 EIA-930 balancing authorities that publish a
+demand series. The v0.2 trust ledger deliberately has a narrower contract: the
+Python ledger publishes an immutable complete-run marker only after all seven
+organized-market RTO/ISOs have compatible issuances, and the Vercel `current`
+pointer separately advances only after that complete run validates. Public run
+lists and the scoreboard expose only marked complete runs; a staged per-BA
+issuance remains available by direct ID for audit. The remaining 46-BA
+explorer/API surface is legacy and best-effort. The public demo at
+[surgeforecast.com](https://surgeforecast.com) has no availability or freshness
+SLA.
 
-- **Live demo** — [surgeforecast.com](https://surgeforecast.com)
-- **Code** — [github.com/tylergibbs1/surge](https://github.com/tylergibbs1/surge)
-- **Model** — [huggingface.co/Tylerbry1/surge-fm-v3](https://huggingface.co/Tylerbry1/surge-fm-v3)
+- [Live playground](https://surgeforecast.com)
+- [Source](https://github.com/tylergibbs1/surge)
+- [Pinned serving model](https://huggingface.co/amazon/chronos-2/tree/29ec3766d36d6f73f0696f85560a422f50e8498c)
+- [Legacy benchmark checkpoint](https://huggingface.co/Tylerbry1/surge-fm-v3)
+- [Methodology](https://github.com/tylergibbs1/surge/blob/main/docs/methodology.md)
+- [Operations and restore runbook](https://github.com/tylergibbs1/surge/blob/main/docs/operations.md)
 
-![Day-ahead forecast vs. reality for US grids](docs/plots/hero_forecast.png)
+![Day-ahead forecast vs. reality for US grids](https://raw.githubusercontent.com/tylergibbs1/surge/main/docs/plots/hero_forecast.png)
 
-*Chronos-2 fine-tuned on 7 years of EIA-930 load + ASOS temperature + calendar
-features. Dashed line = median forecast, shaded band = 80% probability
-interval, solid = actual.*
+> [!IMPORTANT]
+> The historical v1-v3 benchmark used realized future ASOS temperature as an
+> oracle covariate; experiment configurations with generation enabled also use
+> realized wind and solar. Those results are an upper-bound research lane, not
+> an apples-to-apples production comparison. The earlier "beats operators on
+> 6 of 7 RTOs" claim has been withdrawn until a vintage-weather replay and an
+> immutable live-forward evaluation are published. See the
+> [benchmark protocol](https://github.com/tylergibbs1/surge/blob/main/docs/benchmark-protocol.md).
 
-## What it is
+## What is included
 
-- `surge` — Python library for pulling and harmonising US grid data
-  (EIA-930 load, ASOS temperature, wind/solar generation, CAISO OASIS,
-  ERCOT public reports, NOAA storm events). Central BA registry in
-  `surge.bas` tracks all 67 EIA-930 balancing authorities (53 with a
-  demand series, 14 gen-/transmission-only).
-- `surge-fm-v3` — Chronos-2 fine-tuned on 7 years × 53 BAs of load with
-  temperature + calendar covariates. **Test MASE 0.636** on 2025 hold-out
-  (macro over 53 BAs); **0.518** on the original 7 RTOs (PJM/CAISO/ERCOT/
-  MISO/NYISO/ISO-NE/SPP). Beats seasonal-naive-24 by 36% overall, 48% on
-  the RTO subset.
-- `surge-fm-v2` — Previous generation, 7-BA RTO-only model. **Test MASE
-  0.49** on 2025 hold-out. Still available via `SURGE_MODEL_PATH` for
-  users who want the narrower-but-sharper 7-BA variant.
-- `surge.api` — FastAPI inference service with NDJSON streaming and OpenAPI docs.
-- `web/playground` — Next.js playground at **surgeforecast.com**. Four
-  coordinated views over the same data:
-    * **Map** — MapLibre US choropleth, colour-coded by interconnect,
-      pins sized by current load. Click any BA to drill into its chart.
-    * **Grid** (`/grid`) — 53 BA cards sortable by % of all-time peak,
-      peak GW, or name. Filters for interconnection (Eastern/Western/
-      Texas) and size tier (RTO / major utility / small). Each card
-      shows a 24 h sparkline and a traffic-light status dot.
-    * **Live hero** — [Liveline](https://github.com/benjitaylor/liveline)
-      canvas chart of rolling 24 h US aggregate demand (~165 GW
-      overnight, ~240 GW on a summer afternoon), polling
-      `/api/live-load` every 60 s with a visibility-gated interval and
-      keep-last-good fallback on transient 502s.
-    * **Now indicator** on each BA's forecast chart — a dashed vertical
-      line + pulsing SVG dot at the current hour, sliding rightward
-      through the 24 h window once a minute.
-- Daily "bake" — `/api/bake` regenerates the full forecast set at
-  06:15 UTC and writes `forecasts/{BA}.json` + `forecasts/all.json`
-  to Vercel Blob. The read-side tries the blob first (~300 ms edge-
-  cached) and falls through to live Modal inference on miss or
-  `?force=1` (~3 s cold).
+- `surge` is the Python import package. It pulls and harmonizes EIA-930 load,
+  ASOS weather, public CAISO/ERCOT/PJM data, and related grid datasets into a
+  local Parquet store.
+- The v0.2 service defaults to upstream `amazon/chronos-2` at immutable revision
+  `29ec3766d36d6f73f0696f85560a422f50e8498c`. It does not serve the legacy
+  `surge-fm-v3` fine-tune, whose training provenance belongs to the archived
+  oracle benchmark.
+- A tuned replacement cannot become `best/` unless its frozen audit passes
+  train/validation generalization gaps, per-RTO dispersion, worst-grid and
+  upstream-baseline regressions, checkpoint-loss stability, and complete-window
+  coverage. The locked 2025 test stays unopened until that decision is frozen.
+- `surge.api` is a FastAPI inference service with OpenAPI documentation and
+  NDJSON streaming.
+- `web/playground` is the Next.js map, grid view, and forecast explorer.
+- The seven-RTO v0.2 forecast ledger separates issuance time, input cutoff,
+  model revision, publication time, and verification so a newly generated
+  response cannot make old source data look fresh. It stages immutable per-BA
+  issuances, exposes a public run only after one compatible seven-RTO
+  `forecast_runs` marker exists, and keeps direct issuance detail available for
+  audit. The validated Vercel `current` pointer is a second atomic publication
+  boundary.
 
-## Quick start
+The v0.2 `load-v2-core` feature contract uses observed temperature only in the
+historical context and permits only deterministic calendar fields in the
+forecast horizon. Observed temperature, wind, and solar are structurally
+forbidden as future inputs. Surge does not yet ingest an operational weather
+forecast, so the service makes no claim of forecast-time weather skill.
 
-### Library
+## Install
+
+The distribution is named `surge-grid`; the Python import remains `surge`.
+
+```bash
+pip install surge-grid
+```
 
 ```python
 import surge
 
-# 24h of PJM hourly load, written to a local parquet store
 df = surge.load(ba="PJM", start="2025-06-01", end="2025-06-02")
 print(df.head())
 ```
 
-### API
+The EIA loader requires a free `EIA_API_KEY`. Copy `.env.example` and keep the
+filled file outside version control.
+
+## Run the API locally
 
 ```bash
-pip install -e ".[api]"
-python -m surge.ingest --days 90    # populate data store (all 53 BAs by default)
-# checkpoint auto-downloads from https://huggingface.co/Tylerbry1/surge-fm-v3
-uvicorn surge.api.main:app --port 8000
+python -m venv .venv
+source .venv/bin/activate
+pip install "surge-grid[api]==0.2.0"
 
-# 24-hour probabilistic forecast for PJM
-curl 'http://localhost:8000/forecast/PJM?horizon=24'
-
-# Streaming NDJSON for every supported BA
-curl -N 'http://localhost:8000/forecast/stream?horizon=24'
-
-# Full BA registry (codes, names, stations, peak MW)
-curl 'http://localhost:8000/bas'
+export EIA_API_KEY="..."
+export SURGE_DATA_DIR="$PWD/.surge-data"
+python -m surge.ingest \
+  --bas PJM CISO ERCO MISO NYIS ISNE SWPP \
+  --days 90
+uvicorn surge.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Response:
+Then query one balancing authority or stream the complete set:
 
-```json
-{
-  "ba": "PJM",
-  "model": "surge-fm-v3",
-  "as_of_utc": "2026-04-18T20:54:13Z",
-  "horizon": 24,
-  "units": "MW",
-  "points": [
-    {"ts_utc": "2026-04-19T00:00:00Z", "median_mw": 112454, "p10_mw": 111570, "p90_mw": 113493},
-    ...
-  ]
-}
+```bash
+curl --fail 'http://127.0.0.1:8000/forecast/PJM?horizon=24'
+curl --fail --no-buffer 'http://127.0.0.1:8000/forecast/stream?horizon=24'
+curl --fail 'http://127.0.0.1:8000/bas'
 ```
 
-## Accuracy vs. the status quo
+For source development, replace the package install with
+`pip install -e ".[dev,api]"`. A fully offline recovery, including the pinned
+model and data snapshot, is documented in the
+[operations runbook](https://github.com/tylergibbs1/surge/blob/main/docs/operations.md).
 
-![Surge vs. every classical and foundation baseline](docs/plots/leaderboard.png)
+## Evidence status
 
-### 7-RTO subset (same benchmark as v1/v2)
+The archived v3 experiment reports a 2025 hold-out MASE of 0.636 macro across
+53 balancing authorities and 0.518 on the original seven-RTO subset. The
+original v2 seven-RTO checkpoint reports 0.492. These are **oracle-covariate
+offline results**: rolling 24-hour origins, step 24, with MASE denominators
+computed per BA from the training split. They are useful for model development,
+but they are not live-forward performance estimates.
 
-| Model | Test MASE | vs. seasonal-naive-24 | Cost |
-|---|---:|---:|---|
-| seasonal-naive-24 (baseline) | 1.044 | — | — |
-| Prophet (with temp regressor) | 2.023 | +94% worse | — |
-| XGBoost hourly-binned (Roy '25) | 0.901 | −14% | — |
-| N-BEATS (Pelekis '23) | 0.714 | −32% | — |
-| Chronos-Bolt zero-shot | 0.688 | −34% | — |
-| Chronos-2 zero-shot + covariates | 0.567 | −46% | — |
-| **surge-fm-v2 (7-BA specialist)** | **0.492** | **−53%** | free |
-| **surge-fm-v3 (53-BA generalist) — RTO subset** | **0.518** | **−50%** | free |
+Surge Grid reports evaluation results in three non-interchangeable lanes:
 
-### All 53 BAs (v3 only — v2 doesn't cover most of these)
+1. **Oracle upper bound** — realized future covariates; never labeled deployable.
+2. **Vintage replay** — only inputs whose issue or availability time precedes
+   the forecast origin.
+3. **Live forward** — forecasts frozen before outcomes and scored later against
+   a declared actuals vintage.
 
-| Slice | Test MASE | n BAs | MAE (MW macro) |
-|---|---:|---:|---:|
-| All demand-reporting BAs | 0.636 | 53 | 272 |
-| 7 RTO/ISOs | 0.518 | 7 | 889 |
-| 46 non-RTO utilities | 0.653 | 46 | 178 |
+The repository does not currently publish a complete lane-2 or lane-3 result
+set. Operator comparisons and the approximately 70-hour useful-horizon result
+remain historical oracle experiments until rerun under those protocols.
 
-All numbers: 2025 hold-out, rolling 24h-ahead windows at step=24, MASE
-denominator = per-BA train-set seasonal-naive (m=24). Weather covariates
-are ground-truth ASOS temperature where available (7 RTO BAs ingested from
-day one; the 46 non-RTO BAs use a zero-filled fallback pending a backfill
-from the new weather-station mapping in `surge.bas`).
+## Operational contract
 
-### vs. the grid operators' own forecasts
+- `generated_at_utc` is when inference ran.
+- `context_end_utc` / `data_cutoff_utc` identify the newest model input.
+- `published_at_utc` identifies publication, not source freshness.
+- Model and code revisions travel with each immutable issuance.
+- A partial seven-RTO bake must not replace the last complete published run.
+- Stale observations may be retained for diagnosis, but must be marked stale or
+  unavailable rather than silently presented as current.
 
-**Surge beats EIA's day-ahead demand forecast on 6 of 7 major RTOs.**
+The authoritative thresholds, restore procedure, and rollback rules live in
+the [operations runbook](https://github.com/tylergibbs1/surge/blob/main/docs/operations.md).
 
-Every RTO/ISO submits a day-ahead load forecast to EIA each morning — that's
-the *production* forecast used to schedule generation. We pull the operator
-submissions (`type=DF` on EIA's Grid Monitor endpoint) and score them against
-actuals for the exact same 2025 window, same 24h horizon, same per-BA MASE
-denominator surge uses — 8,760 hours per BA, ~61,000 hours total.
+## Development
 
-| Region | Surge MAE | Operator MAE | Ratio | Surge MASE | Operator MASE |
-|---|---:|---:|---:|---:|---:|
-| PJM | 1,937 MW | 3,297 MW | 1.70× | 0.40 | 0.68 |
-| CAISO | 652 MW | 2,098 MW | **3.22×** | 0.51 | 1.66 |
-| ERCOT | 1,215 MW | 1,366 MW | 1.12× | 0.50 | 0.56 |
-| MISO | 1,450 MW | 1,786 MW | 1.23× | 0.45 | 0.55 |
-| NYISO | 501 MW | 560 MW | 1.12× | 0.53 | 0.60 |
-| **ISO-NE** | **577 MW** | **306 MW** | **0.53×** | **0.63** | **0.34** |
-| SPP | 896 MW | 2,590 MW | **2.89×** | 0.61 | 1.77 |
-| **macro (7 RTOs)** | **1,032 MW** | **1,715 MW** | **1.66×** | **0.52** | **0.88** |
+```bash
+pip install -e ".[dev,api]"
+ruff check src tests modal_app/app.py scripts/rebuild_data_snapshot.py \
+  experiments/conformal.py experiments/eval_c2.py experiments/features.py \
+  experiments/finetune_c2.py experiments/overfit.py experiments/run_c2.py \
+  experiments/run_conformal_c2.py experiments/select_c2_candidate.py \
+  scripts/audit_ledger.py scripts/score_ledger.py \
+  scripts/verify_forecasts.py
+mypy src modal_app/app.py
+pytest
 
-Surge's macro MAE is ~40% lower than the operators' own submissions; macro
-MASE is ~41% lower. **ISO-NE is the sole loss** — their forecasting team is
-elite (MASE 0.34 is genuinely excellent for a 24-hour-ahead forecast). Two
-operator submissions, **CAISO (MASE 1.66) and SPP (MASE 1.77)**, did worse
-than a "same as yesterday" baseline on the 2025 window — a polite way of
-saying their day-ahead pipelines need work.
+cd web/playground
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm build
+```
 
-Reproduce: `python scripts/compare_eia_df.py --start 2025-01-01 --end 2026-01-01`.
+See the [contribution guide](https://github.com/tylergibbs1/surge/blob/main/CONTRIBUTING.md),
+the [reproducibility guide](https://github.com/tylergibbs1/surge/blob/main/docs/reproducibility.md),
+and the [release checklist](https://github.com/tylergibbs1/surge/blob/main/docs/release-checklist.md).
 
-## How far ahead can it forecast?
+## Project status
 
-![Horizon degradation curve](docs/plots/horizon_curve.png)
+v0.2 is an alpha research release. Its Vercel pointer publication and
+forward-scoring ledger contract cover PJM, CISO, ERCO, MISO, NYIS, ISNE, and
+SWPP. The repository does not yet publish a settled live-forward result set.
+The broader
+53-BA playground is useful for exploration and demonstration, but it is not a
+complete atomic release surface, a production control-plane, or an availability
+promise. Current priorities are forecast-time weather replay, calibrated
+uncertainty, reproducible snapshots, and decision-focused scenario tooling.
 
-Chronos-2 beats seasonal-naive-24 out to **~70 hours (≈ 2.9 days)** ahead.
-Beyond that, weekly patterns win. Useful-horizon ceiling without adding
-weather forecasts is therefore roughly 3 days; extending it further requires
-HRRR/GFS weather as future covariates.
+## License and disclaimer
 
-## Status
+MIT; see [LICENSE](https://github.com/tylergibbs1/surge/blob/main/LICENSE).
 
-Pre-release, hosted demo live. The API runs locally from a one-line
-`uvicorn`, the 53-BA checkpoint auto-downloads from Hugging Face on
-first request, and the playground at [surgeforecast.com](https://surgeforecast.com)
-is open to anyone. See [roadmap](#roadmap) for what's next.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-## Disclaimer
-
-Research and reference use only. **Not for trading, regulated bidding, or
-bankability-graded decisions.** No SLA. Accuracy numbers are measured on a
-specific 2025 hold-out and may not generalise to future extreme events.
-
-## Roadmap
-
-- [x] Phase 0: scaffold, data library (7 BAs load + weather), parquet store
-- [x] Phase 1: Chronos-2 fine-tune, benchmark vs classical + FM baselines
-- [x] Phase 1: FastAPI inference service
-- [x] Phase 2: all EIA-930 BAs (53 demand-reporting, 67 total registered),
-      surge-fm-v3 checkpoint, BA registry in `surge.bas`, dynamic `/bas`
-      metadata endpoint, playground map extended to every BA footprint
-- [x] Phase 2: always-on hosted demo at [surgeforecast.com](https://surgeforecast.com)
-      with map + grid + live US-demand hero + now-indicator, daily bake
-      to Vercel Blob, Modal fallback for on-demand inference
-- [ ] Phase 2: ASOS backfill for the 46 new BAs (Iowa Mesonet rate-limit
-      cleanup — currently zero-filled) and retrain as surge-fm-v4
-- [ ] Phase 2: LMP forecasting task, Hugging Face dataset release
-- [ ] Phase 3: scenario simulator (surge-sim)
+Research and reference use only. **Not for trading, regulated bidding,
+dispatch, or bankability-grade decisions.** There is no SLA. Results from a
+historical hold-out may not generalize to future conditions or extreme events.

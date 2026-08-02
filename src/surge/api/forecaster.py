@@ -1,163 +1,254 @@
-"""Pure forecasting logic. The FastAPI app creates & injects the pipeline.
+"""Pure, point-in-time-safe forecasting logic for the FastAPI app."""
 
-No globals, no singletons, no locks — the app's lifespan manager owns the
-model and passes it into this module via `forecast_ba(pipe=..., ba=...)`.
-"""
 from __future__ import annotations
 
 import os
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import holidays
 import numpy as np
 import polars as pl
 
 from surge import store
+from surge.features import (
+    DEFAULT_QUANTILE_LEVELS,
+    LOAD_V2_CORE,
+    POINT_ESTIMATE_KIND,
+    POINT_ESTIMATE_LABEL,
+    AvailabilityMode,
+    build_live_bundle,
+    numpy_to_datetime,
+)
+from surge.model_loader import artifact_sha256
 
-# Prefer HF Hub (so users don't need to download 478 MB before running). If
-# a local path override is set, use that (e.g. during offline dev or CI).
-# Default is the 53-BA surge-fm-v3 generalist; set SURGE_MODEL_PATH=
-# Tylerbry1/surge-fm-v2 to serve the 7-RTO specialist instead.
-_DEFAULT_HF = "Tylerbry1/surge-fm-v3"
-_LOCAL_FALLBACK = Path(__file__).resolve().parents[3] / "models" / "chronos2_full_v3"
-MODEL_PATH = os.environ.get(
-    "SURGE_MODEL_PATH",
-    str(_LOCAL_FALLBACK) if _LOCAL_FALLBACK.exists() else _DEFAULT_HF,
+# The old Surge v3 checkpoint used a legacy feature/training contract and must
+# not be presented as a v0.2 no-peeking model. Default to a pinned upstream
+# Chronos-2 artifact; a v0.2 fine-tune can be selected explicitly by path and
+# immutable revision.
+DEFAULT_CHRONOS2_MODEL = "amazon/chronos-2"
+PINNED_CHRONOS2_REVISION = "29ec3766d36d6f73f0696f85560a422f50e8498c"
+UNKNOWN_MODEL_REVISION = "unknown"
+
+
+def _resolve_model_revision(model_path: str, configured_revision: str | None) -> str:
+    if configured_revision:
+        return configured_revision
+    if model_path == DEFAULT_CHRONOS2_MODEL:
+        return PINNED_CHRONOS2_REVISION
+    return UNKNOWN_MODEL_REVISION
+
+
+MODEL_PATH = os.environ.get("SURGE_MODEL_PATH", DEFAULT_CHRONOS2_MODEL)
+MODEL_REVISION = _resolve_model_revision(
+    MODEL_PATH,
+    os.environ.get("SURGE_MODEL_REVISION"),
 )
-# Pin a specific commit SHA when loading from the HF hub. Defends against
-# upstream-repo takeover (the loader would otherwise pull `main` which is
-# mutable). Override via env when publishing a new checkpoint.
-MODEL_REVISION = os.environ.get(
-    "SURGE_MODEL_REVISION", "b84726ca520b9d443236d025a000cc95616a334c"
+CODE_REVISION = os.environ.get("SURGE_CODE_REVISION", "unknown")
+MODEL_NAME = os.environ.get(
+    "SURGE_MODEL_NAME",
+    MODEL_PATH.rstrip("/").rsplit("/", 1)[-1],
 )
-MODEL_NAME = "surge-fm-v3"
+MODEL_FEATURE_SPEC_SHA256 = os.environ.get("SURGE_MODEL_FEATURE_SPEC_SHA256")
+MODEL_ARTIFACT_SHA256 = os.environ.get("SURGE_MODEL_ARTIFACT_SHA256")
 CONTEXT_LENGTH = 2048
 
-US_HOLIDAYS = holidays.UnitedStates()
+
+def model_load_revision() -> str | None:
+    """Return a real Hub revision for loading, never the provenance sentinel."""
+    if MODEL_REVISION == UNKNOWN_MODEL_REVISION:
+        return None
+    if Path(MODEL_PATH).expanduser().exists():
+        return None
+    return MODEL_REVISION
 
 
-def _ffill(x: np.ndarray) -> np.ndarray:
-    out = x.astype(np.float64).copy()
-    last = np.nan
-    for i in range(len(out)):
-        if np.isnan(out[i]):
-            out[i] = last
-        else:
-            last = out[i]
-    m = np.isnan(out)
-    if m.any():
-        # Backfill leading NaNs; fall back to 0 if the whole array is NaN
-        # (e.g. a BA we've never ingested weather for — served as a flat
-        # covariate rather than crashing the forecast).
-        real = out[~m]
-        out[m] = real[0] if real.size else 0.0
-    return out
-
-
-def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
-    ts = ts_utc.astype("datetime64[h]")
-    hour = (ts - ts.astype("datetime64[D]")).astype(int) % 24
-    day = ts.astype("datetime64[D]").astype("datetime64[s]").astype("O")
-    dow = np.array([d.weekday() for d in day], dtype=np.float32)
-    weekend = (dow >= 5).astype(np.float32)
-    holiday = np.array([1.0 if date(d.year, d.month, d.day) in US_HOLIDAYS else 0.0
-                        for d in day], dtype=np.float32)
-    two_pi = 2 * np.pi
-    return {
-        "hour_sin": np.sin(two_pi * hour / 24).astype(np.float32),
-        "hour_cos": np.cos(two_pi * hour / 24).astype(np.float32),
-        "dow_sin":  np.sin(two_pi * dow / 7).astype(np.float32),
-        "dow_cos":  np.cos(two_pi * dow / 7).astype(np.float32),
-        "is_weekend": weekend,
-        "is_holiday": holiday,
-    }
-
-
-def _load_ba(ba: str) -> dict[str, Any]:
-    # Dedupe at the store layer so overlapping ingest windows or in-place
-    # EIA revisions don't feed double-counted rows into the model context.
-    load = (store.scan("load_hourly", dedupe_on=["ts_utc", "ba"])
-              .filter(pl.col("ba") == ba)
-              .select("ts_utc", "load_mw")
-              .sort("ts_utc")
-              .collect())
-    load = load.with_columns(
-        pl.when(pl.col("load_mw") > 200_000).then(None).otherwise(pl.col("load_mw")).alias("load_mw")
+def _model_attestation() -> tuple[bool, str | None]:
+    pinned_upstream = (
+        MODEL_PATH == DEFAULT_CHRONOS2_MODEL
+        and MODEL_REVISION == PINNED_CHRONOS2_REVISION
     )
-    weather = (store.scan("weather_hourly", dedupe_on=["ts_utc", "ba"])
-                 .filter(pl.col("ba") == ba)
-                 .select("ts_utc", "temp_c")
-                 .sort("ts_utc")
-                 .collect())
-    j = load.join(weather, on="ts_utc", how="left")
-    return {
-        "ts": j["ts_utc"].to_numpy(),
-        "target": _ffill(j["load_mw"].to_numpy()),
-        "temp_c": _ffill(j["temp_c"].to_numpy()).astype(np.float32),
-    }
+    if MODEL_PATH == DEFAULT_CHRONOS2_MODEL:
+        return pinned_upstream, None
+
+    try:
+        computed_sha256 = artifact_sha256(MODEL_PATH)
+    except (OSError, RuntimeError, ValueError):
+        return False, None
+
+    custom_attested = (
+        MODEL_REVISION != UNKNOWN_MODEL_REVISION
+        and LOAD_V2_CORE.sha256 == MODEL_FEATURE_SPEC_SHA256
+        and computed_sha256 == MODEL_ARTIFACT_SHA256
+    )
+    return custom_attested, computed_sha256
+
+
+def model_release_safe() -> bool:
+    """Whether the configured artifact has an immutable no-peeking identity."""
+    release_safe, _ = _model_attestation()
+    return release_safe
+
+
+def model_artifact_identity() -> str | None:
+    """Return the computed local artifact identity used in provenance."""
+    _, computed_sha256 = _model_attestation()
+    return computed_sha256
 
 
 def data_end_utc() -> datetime | None:
-    try:
-        df = (store.scan("load_hourly")
+    """Compatibility accessor for the load-source watermark."""
+    return data_watermarks_utc()["load_hourly"]
+
+
+def data_watermarks_utc() -> dict[str, datetime | None]:
+    """Return last non-null valid times for every required live source."""
+    watermarks: dict[str, datetime | None] = {}
+    for name, value_column in (
+        ("load_hourly", "load_mw"),
+        ("weather_hourly", "temp_c"),
+    ):
+        try:
+            lazy = store.scan(name)
+            names = lazy.collect_schema().names()
+            if not {"ts_utc", value_column}.issubset(names):
+                watermarks[name] = None
+                continue
+            df = (
+                lazy.filter(pl.col(value_column).is_not_null())
                 .select(pl.col("ts_utc").max().alias("m"))
-                .collect())
-        if df.is_empty() or df["m"][0] is None:
-            return None
-        return df["m"][0]
-    except Exception:
-        return None
+                .collect()
+            )
+            watermarks[name] = None if df.is_empty() else df["m"][0]
+        except Exception:
+            watermarks[name] = None
+    return watermarks
 
 
-def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
-    """Produce a 1-BA probabilistic forecast using the loaded pipeline."""
+def _as_numpy(value: Any) -> np.ndarray:
+    """Convert torch-like model output without importing torch in this module."""
+    for method in ("float", "cpu"):
+        if hasattr(value, method):
+            value = getattr(value, method)()
+    if hasattr(value, "numpy"):
+        value = value.numpy()
+    return np.asarray(value)
+
+
+def _squeezed_output(value: Any, *, expected_ndim: int) -> np.ndarray:
+    result = _as_numpy(value)
+    if result.ndim == expected_ndim + 1 and result.shape[0] == 1:
+        result = result[0]
+    if result.ndim != expected_ndim:
+        raise ValueError(f"unexpected model output shape {result.shape}")
+    return result
+
+
+def forecast_ba(
+    pipe: Any,
+    ba: str,
+    horizon: int = 24,
+    *,
+    issued_at_utc: datetime | None = None,
+    feature_cutoff_utc: datetime | None = None,
+    cutoff_utc: datetime | None = None,
+    availability_mode: AvailabilityMode | str = AvailabilityMode.EXACT_VINTAGE,
+) -> dict[str, Any]:
+    """Produce one probabilistic forecast from a frozen point-in-time snapshot."""
     if horizon < 1 or horizon > 168:
         raise ValueError("horizon must be in 1..168")
+    if feature_cutoff_utc is not None and cutoff_utc is not None:
+        raise ValueError("pass only feature_cutoff_utc; cutoff_utc is a compatibility alias")
 
-    bd = _load_ba(ba)
-    if len(bd["target"]) < CONTEXT_LENGTH + 1:
-        raise ValueError(f"not enough history for {ba} (need {CONTEXT_LENGTH}h)")
+    # Freeze wall-clock values before the first datastore read. A multi-read
+    # feature build therefore has one coherent availability boundary.
+    issued = issued_at_utc or datetime.now(tz=UTC)
+    feature_cutoff = feature_cutoff_utc or cutoff_utc or issued
+    mode = AvailabilityMode(availability_mode)
+    bundle = build_live_bundle(
+        ba,
+        issued_at_utc=issued,
+        cutoff_utc=feature_cutoff,
+        horizon=horizon,
+        context_length=CONTEXT_LENGTH,
+        availability_mode=mode,
+        include_generation=False,
+        spec=LOAD_V2_CORE,
+    )
 
-    end_idx = len(bd["target"])
-    start_idx = end_idx - CONTEXT_LENGTH
-    target = bd["target"][start_idx:end_idx].astype(np.float32)
-    temp_past = bd["temp_c"][start_idx:end_idx]
-    cal_past = _calendar(bd["ts"][start_idx:end_idx])
-
-    last_ts = bd["ts"][end_idx - 1]
-    future_ts = (last_ts + np.arange(1, horizon + 1, dtype="timedelta64[h]")).astype("datetime64[h]")
-    cal_future = _calendar(future_ts.astype("datetime64[us]"))
-    temp_future = np.full(horizon, bd["temp_c"][end_idx - 1], dtype=np.float32)
-
-    past_covariates = {"temp_c": temp_past.astype(np.float32), **cal_past}
-    future_covariates = {"temp_c": temp_future, **cal_future}
-
-    task = [{
-        "target": target,
-        "past_covariates": past_covariates,
-        "future_covariates": future_covariates,
-    }]
-    quants_list, _ = pipe.predict_quantiles(
-        task, prediction_length=horizon, quantile_levels=[0.1, 0.5, 0.9],
+    quantiles_list, means_list = pipe.predict_quantiles(
+        [bundle.task],
+        prediction_length=bundle.prediction_length,
+        quantile_levels=list(DEFAULT_QUANTILE_LEVELS),
         batch_size=1,
     )
-    q = quants_list[0].squeeze(0).float().cpu().numpy()  # (H, 3)
+    quantiles = _squeezed_output(quantiles_list[0], expected_ndim=2)
+    means = _squeezed_output(means_list[0], expected_ndim=1)
+    if quantiles.shape != (bundle.prediction_length, len(DEFAULT_QUANTILE_LEVELS)):
+        raise ValueError(f"unexpected quantile output shape {quantiles.shape}")
+    if means.shape != (bundle.prediction_length,):
+        raise ValueError(f"unexpected mean output shape {means.shape}")
 
-    points = []
-    for i in range(horizon):
-        ts_i = future_ts[i].astype("datetime64[s]").astype(datetime).replace(tzinfo=UTC)
-        points.append({
-            "ts_utc": ts_i,
-            "median_mw": float(q[i, 1]),
-            "p10_mw": float(q[i, 0]),
-            "p90_mw": float(q[i, 2]),
-            "temp_c": float(temp_future[i]),
-        })
+    start = bundle.discard_prefix
+    stop = start + horizon
+    quantiles = quantiles[start:stop]
+    means = means[start:stop]
+    points: list[dict[str, Any]] = []
+    for index, timestamp in enumerate(bundle.served_ts_utc):
+        valid_at = numpy_to_datetime(timestamp)
+        if valid_at <= bundle.issued_at_utc:
+            raise ValueError("served forecast timestamps must be strictly after issuance")
+        p50 = float(quantiles[index, 1])
+        points.append(
+            {
+                "ts_utc": valid_at,
+                "valid_at_utc": valid_at,
+                "horizon_step": index + 1,
+                "lead_minutes_from_issue": int(
+                    (valid_at - bundle.issued_at_utc).total_seconds() // 60
+                ),
+                "mean_mw": float(means[index]),
+                "p10_mw": float(quantiles[index, 0]),
+                "p50_mw": p50,
+                "median_mw": p50,
+                "p90_mw": float(quantiles[index, 2]),
+                # LOAD_V2_CORE has no future temperature input. Keep nullable
+                # compatibility fields explicit so clients cannot mistake an
+                # observed or persisted value for a weather forecast.
+                "temp_c": None,
+                "future_temp_c": None,
+                "future_temp_vintage_id": None,
+            }
+        )
 
+    release_safe, computed_artifact_sha256 = _model_attestation()
+    provenance: dict[str, Any] = {
+        **bundle.provenance,
+        "model_revision": MODEL_REVISION,
+        "model_artifact_sha256": computed_artifact_sha256,
+        "code_revision": CODE_REVISION,
+        "feature_snapshot_sha256": bundle.feature_snapshot_sha256,
+        "model_feature_spec_sha256": MODEL_FEATURE_SPEC_SHA256,
+        "model_release_safe": release_safe,
+    }
     return {
         "points": points,
-        "context_start_utc": bd["ts"][start_idx].astype("datetime64[s]").astype(datetime).replace(tzinfo=UTC),
-        "context_end_utc":   bd["ts"][end_idx - 1].astype("datetime64[s]").astype(datetime).replace(tzinfo=UTC),
+        "issued_at_utc": bundle.issued_at_utc,
+        "feature_cutoff_utc": bundle.cutoff_utc,
+        "cutoff_utc": bundle.cutoff_utc,
+        "forecast_start_utc": bundle.forecast_start_utc,
+        "context_start_utc": numpy_to_datetime(bundle.context_ts_utc[0]),
+        "context_end_utc": numpy_to_datetime(bundle.context_ts_utc[-1]),
+        "feature_spec_version": bundle.feature_spec.version,
+        "feature_spec_sha256": bundle.feature_spec.sha256,
+        "feature_snapshot_sha256": bundle.feature_snapshot_sha256,
+        "availability_mode": bundle.availability_mode.value,
+        "point_estimate_kind": POINT_ESTIMATE_KIND,
+        "point_estimate_quantile": POINT_ESTIMATE_LABEL,
+        "mase_scale_24": bundle.mase_scale_24,
+        "mase_scale": bundle.mase_scale_24,
+        "source_lag_hours": bundle.discard_prefix,
+        "model_prediction_length": bundle.prediction_length,
+        "warnings": list(bundle.warnings),
+        "provenance": provenance,
     }
