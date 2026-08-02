@@ -143,8 +143,59 @@ worth keeping:
    The selection was sound; the target was simply not reachable by tuning these
    knobs.
 
-The open question is what changed for ISNE in 2023 and stayed changed into
-2024. That is a base-model or data question, not a calibration one.
+## Root cause: the no-shrink clamp is a one-way ratchet
+
+The open question — what changed for ISNE — had a wrong premise. Nothing broke.
+
+`artifacts/coverage-diagnostic/` reports uncalibrated coverage per RTO per month
+for 2021–2024. Two facts settle it:
+
+1. The base model under-covers **everywhere, every year**: 0.72–0.79 against a
+   nominal 0.80, never above it. Miscalibration is strongly seasonal — the
+   seven-RTO monthly mean is worst in winter (0.68–0.73 in Dec–Feb) and best in
+   spring (0.79–0.82).
+2. ISNE is the **best**-calibrated RTO, not the worst: 0.772, 0.776, 0.794,
+   0.791 across 2021–2024. It never drifted. It simply sits closest to nominal,
+   and rose slightly in 2023–2024.
+
+That inverts the failure. Calibration is forbidden to narrow an interval
+(`negative_adjustment_policy: clamp-to-zero-no-interval-shrink`), so it is a
+one-way ratchet: it can only push coverage up. A series already near nominal
+therefore gets pushed past it, and the closer to nominal it starts, the worse
+the overshoot. Across 21 (RTO, year) pairs, corr(uncalibrated coverage,
+post-calibration overshoot) = **0.63**, and the two largest overshoots are the
+two highest raw coverages — ISNE 2023 (0.794 → 0.822) and NYIS 2023
+(0.784 → 0.807).
+
+`artifacts/coverage-diagnostic/clamp-binding-2023.json` confirms the mechanism
+directly. Fraction of eligible cells whose adjustment is clamped to exactly
+zero, 2023, under the frozen policy:
+
+| RTO | Clamped to zero | Uncalibrated coverage | Calibrated |
+|---|---:|---:|---:|
+| NYIS | 79.2% | 0.784 | 0.807 |
+| ERCO | 76.5% | 0.770 | 0.798 |
+| ISNE | 76.1% | 0.794 | **0.822** |
+| PJM | 56.0% | 0.761 | 0.805 |
+| CISO | 54.4% | 0.770 | 0.802 |
+| SWPP | 46.0% | 0.746 | 0.795 |
+| MISO | 45.5% | 0.744 | 0.796 |
+
+For ISNE the calibrator wants to narrow three quarters of the time and is not
+allowed to, so it does nothing there and widens in the remaining quarter. It
+can never compensate. Coverage can only end up at or above the raw level.
+
+**So the ±2-point per-RTO bar is unreachable by construction for any
+well-calibrated series under the current policy**, and no choice of γ, window or
+alpha scope can fix it. That explains why raising γ made 2023 worse: it is not a
+tuning failure.
+
+This is now a policy decision rather than a research question. The clamp exists
+so calibration can never silently narrow a published interval — a real safety
+property, since a too-narrow interval understates risk to an operator. The
+options are to keep the clamp and accept that well-calibrated series will
+over-cover, or to permit bounded narrowing with an explicit floor. That choice
+belongs to whoever owns the public claim, not to this experiment.
 
 Both runs executed on CPU in `float32`, not the frozen H100 `bfloat16` runtime
 identity; each artifact's `runtime` block records this.
