@@ -1,0 +1,347 @@
+{
+  "availability_mode": "retrospective_final",
+  "bas": [
+    "PJM",
+    "CISO",
+    "ERCO",
+    "MISO",
+    "NYIS",
+    "ISNE",
+    "SWPP"
+  ],
+  "code_revision": "3fa3a3457289d96269c75b57186aafb04406a99d",
+  "cohort": {
+    "note": "training-lane years for the fine-tune, but the calibrated model is the pinned zero-shot upstream base, which Surge never trains",
+    "origin_count": 365,
+    "scored_origin_end_utc": "2023-12-31T00:00:00.000000",
+    "scored_origin_start_utc": "2023-02-01T00:00:00.000000",
+    "used_by_any_calibration_search": false,
+    "year": 2023
+  },
+  "context": 2048,
+  "coverage_tolerance": 0.02,
+  "data_snapshot_sha256": "77d80d4031e2391808103ef29bb182b3ee2469cec1c24ae00569d217bd48a4c0",
+  "frozen_policy": {
+    "alpha_scope": "per-series",
+    "gamma": 0.05,
+    "min_history_mature_origins": 28,
+    "source": "artifacts/adaptive-conformal-validation.json",
+    "window_mature_origins": 168
+  },
+  "held_out_test_lane": "not-opened",
+  "horizon": 24,
+  "model": "amazon/chronos-2",
+  "model_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+  "negative_adjustment_policy": "clamp-to-zero-no-interval-shrink",
+  "outcome_delay_hours": 72,
+  "outcome_timing_policy_reference": "eia-latest-at-plus72h-v1",
+  "point_in_time_replay": false,
+  "protocol": "single-shot-replication-of-a-frozen-calibration-policy",
+  "replication_holds": false,
+  "results": {
+    "frozen-adaptive": {
+      "baseline": {
+        "coverage": 0.770291,
+        "interval_score": 5370.115341,
+        "mean_width": 3383.726294,
+        "n_points": 56084,
+        "wis": 737.851355
+      },
+      "calibrated": {
+        "coverage": 0.803277,
+        "interval_score": 5352.327537,
+        "mean_width": 3689.985134,
+        "n_points": 56084,
+        "wis": 736.665502
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": 0.6468,
+      "macro_interval_score_improvement_pct": 0.6468,
+      "macro_relative_interval_score": 0.993532,
+      "max_per_ba_coverage_error": 0.022231,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.770527,
+            "interval_score": 2963.585563,
+            "mean_width": 1869.141213,
+            "n_points": 8014,
+            "wis": 409.342314
+          },
+          "calibrated": {
+            "coverage": 0.801472,
+            "interval_score": 2938.829959,
+            "mean_width": 2051.40237,
+            "n_points": 8014,
+            "wis": 407.69194
+          },
+          "coverage_error": 0.001472
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.779067,
+            "interval_score": 7143.061284,
+            "mean_width": 4533.474763,
+            "n_points": 8016,
+            "wis": 979.697776
+          },
+          "calibrated": {
+            "coverage": 0.79753,
+            "interval_score": 7160.11147,
+            "mean_width": 4704.287541,
+            "n_points": 8016,
+            "wis": 980.834455
+          },
+          "coverage_error": 0.00247
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.797156,
+            "interval_score": 2845.859338,
+            "mean_width": 1777.303367,
+            "n_points": 8016,
+            "wis": 392.650068
+          },
+          "calibrated": {
+            "coverage": 0.822231,
+            "interval_score": 2763.914914,
+            "mean_width": 1933.808772,
+            "n_points": 8016,
+            "wis": 387.187107
+          },
+          "coverage_error": 0.022231
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.750125,
+            "interval_score": 7017.20185,
+            "mean_width": 4300.321066,
+            "n_points": 8016,
+            "wis": 966.215474
+          },
+          "calibrated": {
+            "coverage": 0.795534,
+            "interval_score": 7004.774348,
+            "mean_width": 4788.927893,
+            "n_points": 8016,
+            "wis": 965.386974
+          },
+          "coverage_error": 0.004466
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.784556,
+            "interval_score": 2465.978237,
+            "mean_width": 1566.581663,
+            "n_points": 8016,
+            "wis": 340.632945
+          },
+          "calibrated": {
+            "coverage": 0.807136,
+            "interval_score": 2457.601833,
+            "mean_width": 1660.170511,
+            "n_points": 8016,
+            "wis": 340.074518
+          },
+          "coverage_error": 0.007136
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.761106,
+            "interval_score": 11260.819561,
+            "mean_width": 7283.544072,
+            "n_points": 7991,
+            "wis": 1547.165137
+          },
+          "calibrated": {
+            "coverage": 0.80453,
+            "interval_score": 11271.450198,
+            "mean_width": 8105.985674,
+            "n_points": 7991,
+            "wis": 1547.873846
+          },
+          "coverage_error": 0.00453
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.74947,
+            "interval_score": 3911.890913,
+            "mean_width": 2367.375841,
+            "n_points": 8015,
+            "wis": 531.672146
+          },
+          "calibrated": {
+            "coverage": 0.79451,
+            "interval_score": 3887.285442,
+            "mean_width": 2598.540644,
+            "n_points": 8015,
+            "wis": 530.031782
+          },
+          "coverage_error": 0.00549
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "reference-fixed": {
+      "baseline": {
+        "coverage": 0.770291,
+        "interval_score": 5370.115341,
+        "mean_width": 3383.726294,
+        "n_points": 56084,
+        "wis": 737.851355
+      },
+      "calibrated": {
+        "coverage": 0.825761,
+        "interval_score": 5370.143693,
+        "mean_width": 3906.486338,
+        "n_points": 56084,
+        "wis": 737.853245
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": 0.2399,
+      "macro_interval_score_improvement_pct": 0.2399,
+      "macro_relative_interval_score": 0.997601,
+      "max_per_ba_coverage_error": 0.051796,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.770527,
+            "interval_score": 2963.585563,
+            "mean_width": 1869.141213,
+            "n_points": 8014,
+            "wis": 409.342314
+          },
+          "calibrated": {
+            "coverage": 0.819691,
+            "interval_score": 2948.998571,
+            "mean_width": 2159.749824,
+            "n_points": 8014,
+            "wis": 408.369848
+          },
+          "coverage_error": 0.019691
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.779067,
+            "interval_score": 7143.061284,
+            "mean_width": 4533.474763,
+            "n_points": 8016,
+            "wis": 979.697776
+          },
+          "calibrated": {
+            "coverage": 0.824102,
+            "interval_score": 7196.156348,
+            "mean_width": 5042.234854,
+            "n_points": 8016,
+            "wis": 983.237447
+          },
+          "coverage_error": 0.024102
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.797156,
+            "interval_score": 2845.859338,
+            "mean_width": 1777.303367,
+            "n_points": 8016,
+            "wis": 392.650068
+          },
+          "calibrated": {
+            "coverage": 0.851796,
+            "interval_score": 2802.292412,
+            "mean_width": 2155.300025,
+            "n_points": 8016,
+            "wis": 389.745606
+          },
+          "coverage_error": 0.051796
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.750125,
+            "interval_score": 7017.20185,
+            "mean_width": 4300.321066,
+            "n_points": 8016,
+            "wis": 966.215474
+          },
+          "calibrated": {
+            "coverage": 0.817989,
+            "interval_score": 7009.382509,
+            "mean_width": 5085.328181,
+            "n_points": 8016,
+            "wis": 965.694185
+          },
+          "coverage_error": 0.017989
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.784556,
+            "interval_score": 2465.978237,
+            "mean_width": 1566.581663,
+            "n_points": 8016,
+            "wis": 340.632945
+          },
+          "calibrated": {
+            "coverage": 0.832585,
+            "interval_score": 2468.765579,
+            "mean_width": 1833.16942,
+            "n_points": 8016,
+            "wis": 340.818767
+          },
+          "coverage_error": 0.032585
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.761106,
+            "interval_score": 11260.819561,
+            "mean_width": 7283.544072,
+            "n_points": 7991,
+            "wis": 1547.165137
+          },
+          "calibrated": {
+            "coverage": 0.82643,
+            "interval_score": 11300.803264,
+            "mean_width": 8416.668249,
+            "n_points": 7991,
+            "wis": 1549.830717
+          },
+          "coverage_error": 0.02643
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.74947,
+            "interval_score": 3911.890913,
+            "mean_width": 2367.375841,
+            "n_points": 8015,
+            "wis": 531.672146
+          },
+          "calibrated": {
+            "coverage": 0.807735,
+            "interval_score": 3882.3138,
+            "mean_width": 2666.429489,
+            "n_points": 8015,
+            "wis": 529.700339
+          },
+          "coverage_error": 0.007735
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    }
+  },
+  "runtime": {
+    "cuda_device": null,
+    "device_map": "cpu",
+    "dtype": "float32",
+    "load_seconds": 2.047,
+    "predict_seconds": 540.03
+  },
+  "schema_version": 1,
+  "selection_performed": false,
+  "target_coverage": 0.8,
+  "versions": {
+    "numpy": "2.1.2",
+    "torch": "2.8.0"
+  }
+}

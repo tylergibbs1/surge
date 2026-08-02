@@ -66,20 +66,45 @@ per-series candidates did, with worst-case error falling monotonically as
 `gamma` rises. Per-series adaptation is also cheaper in interval score than the
 fixed level at equal window.
 
-Three honest limitations:
+Two caveats on the table itself:
 
 - **The search was iterative.** The per-lead family was evaluated first,
   including against the reporting half; the per-series family was added after
-  seeing that result. Two families have therefore been inspected against this
-  segment, so this is a promising result rather than a single-shot confirmation.
-  A clean confirmation requires data neither family has seen — in practice the
-  live-forward ledger, not the locked 2025 lane.
+  seeing that result. Two families were inspected against this segment, so the
+  2024 pass is not a single-shot confirmation.
 - **Calibration still costs interval score here.** Every macro relative interval
   score above is greater than 1: on this half, calibration buys coverage
   correctness at a small Winkler cost. Adaptive calibration is the cheaper way
   to buy it, not a free improvement.
-- The run executed on CPU in `float32`, not the frozen H100 `bfloat16` runtime
-  identity; the artifact's `runtime` block records this.
+
+## Replication, and what it overturns
+
+`experiments/run_aci_replication_c2.py` ran the frozen 2024 winner once, with no
+selection step, on all of 2023 — 365 origins no calibration search had touched.
+Result in `artifacts/adaptive-conformal-replication-2023.json`:
+
+| Calibration | Coverage | Worst per-RTO coverage error | Macro relative interval score | Meets the ±2pt bar |
+|---|---:|---:|---:|:--:|
+| Fixed level, window 168 | 0.8258 | 0.0518 | 0.9976 | no |
+| Frozen adaptive, γ=0.05, w=168 | 0.8033 | 0.0222 | 0.9935 | **no** |
+
+**The 2024 pass did not replicate.** Worst-case error came in at 2.22 points
+against a 2-point bar, missing it — ISNE over-covered at 0.822, the same RTO
+that breaks the fixed level. So the honest conclusion is narrower than the 2024
+half suggested:
+
+- Adaptive calibration is a robust *improvement*: on both cohorts it roughly
+  halves the worst per-RTO coverage error relative to the fixed level (2.2 vs
+  5.2 points on 2023; 1.4 vs 4.0 on the 2024 half) and costs less interval
+  score. On 2023 it also beat the uncalibrated forecasts outright.
+- It is **not** a reliable ±2-point per-RTO guarantee. Meeting that bar on the
+  2024 half was partly cohort luck.
+- ISNE is the persistent offender in every configuration and both cohorts,
+  which points at a base-model quantile problem specific to that RTO rather
+  than a calibration-window problem.
+
+Both runs executed on CPU in `float32`, not the frozen H100 `bfloat16` runtime
+identity; each artifact's `runtime` block records this.
 
 Nothing here changes serving. No forecaster applies these adjustments, and no
 public accuracy or calibration claim rests on this experiment.
