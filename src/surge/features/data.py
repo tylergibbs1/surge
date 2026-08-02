@@ -20,6 +20,7 @@ from surge.features.calendar import (
     numpy_to_datetime,
 )
 from surge.features.spec import LOAD_V2_CORE, AvailabilityMode, FeatureSpec, validate_task
+from surge.features.splits import ACTIVE as ACTIVE_SPLIT
 
 _ONE_HOUR = np.timedelta64(1, "h")
 MAX_LIVE_SOURCE_LAG_HOURS = 12
@@ -323,8 +324,8 @@ def load_ba_data(
         **{key: value.astype(np.float32) for key, value in aligned.items()},
     }
     years = ts_utc.astype("datetime64[Y]").astype(np.int64) + 1970
-    train_end = int(np.searchsorted(years, 2024, side="left"))
-    val_end = int(np.searchsorted(years, 2025, side="left"))
+    train_end = int(np.searchsorted(years, ACTIVE_SPLIT.train_before_year, side="left"))
+    val_end = int(np.searchsorted(years, ACTIVE_SPLIT.locked_test_from_year, side="left"))
     scale_source = target[:train_end]
     if len(scale_source) <= 24:
         scale_source = target[:val_end]

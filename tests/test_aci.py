@@ -230,6 +230,6 @@ def test_replication_refuses_the_locked_lane() -> None:
     from experiments.run_aci_replication_c2 import validate_cohort_year
 
     for year in (2025, 2026, 2018):
-        with pytest.raises(ValueError, match="locked test lane|cohort year must be"):
+        with pytest.raises(ValueError, match=r"locked test lane|cohort year must be"):
             validate_cohort_year(year)
     assert validate_cohort_year(2023) == 2023
