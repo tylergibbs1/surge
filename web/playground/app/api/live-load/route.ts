@@ -19,7 +19,7 @@ const UA = "surge-playground/1.0 (+https://github.com/tylergibbs1/surge)"
 
 const MODAL_FALLBACK =
   process.env.SURGE_API_URL ??
-  "https://tylergibbs1--surge-api-fastapi-app.modal.run"
+  "https://tylergibbs1--surge-api-v02-fastapi-app.modal.run"
 
 // Shorter maxage than before — we're now reading near-real-time from
 // EIA directly, so stale-by-50s is the floor, not the ceiling.

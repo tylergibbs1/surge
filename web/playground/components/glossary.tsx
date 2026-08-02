@@ -24,8 +24,9 @@ export function Glossary() {
           matching electricity generation to demand in real time. <b>PJM</b>{" "}
           runs the DC-to-Chicago corridor; <b>CAISO</b> runs California;{" "}
           <b>ERCOT</b> runs most of Texas. 53 BAs publish a live demand feed
-          to the US Energy Information Administration (EIA-930) — surge
-          forecasts all of them.
+          to the US Energy Information Administration (EIA-930). Surge&apos;s
+          immutable public ledger focuses on seven major RTO/ISOs; the
+          research explorer retains broader BA coverage.
         </Term>
 
         <Term name="Interconnection">
@@ -75,9 +76,9 @@ export function Glossary() {
         <Term name="MASE (model accuracy score)">
           How well the model does compared to a naive &quot;same as last
           week&quot; baseline. <b>Lower is better.</b> 1.0 = no better than
-          naive; 0.5 = half the error of naive; 0.0 = perfect. surge-fm-v3
-          scores 0.52 on the 7 biggest grids — about 10× better than a
-          typical weather-adjusted regression.
+          naive; 0.5 = half the error of naive; 0.0 = perfect. Surge only
+          publishes this score after an immutable forecast has settled
+          against its declared actuals vintage.
         </Term>
       </div>
     </details>

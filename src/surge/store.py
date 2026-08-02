@@ -27,17 +27,41 @@ matching `surge.schemas`. The store's job is durability and partitioning.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import io
 import os
+import re
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
 
-DATASETS = ("load_hourly", "lmp", "gen_by_fuel", "solar_actual", "wind_actual",
-            "renewable_forecast", "system_lambda", "weather_point")
+DATASETS = (
+    "load_hourly",
+    "load_observation_revisions",
+    "lmp",
+    "gen_by_fuel",
+    "solar_actual",
+    "wind_actual",
+    "renewable_forecast",
+    "system_lambda",
+    "weather_hourly",
+    "weather_point",
+    "weather_forecast_hourly",
+    "forecast_points",
+    "forecast_issuances",
+    "forecast_runs",
+    "forecast_verifications",
+)
+
+
+class ImmutableConflictError(RuntimeError):
+    """A deterministic immutable record already exists with different bytes."""
+
+
+_SAFE_COMPONENT = re.compile(r"^[A-Za-z0-9_.:-]+$")
 
 
 def _root() -> Path:
@@ -131,6 +155,142 @@ def scan(
         lf.sort(sort_cols, descending=descending)
           .unique(subset=dedupe_on, keep="first")
     )
+
+
+def scan_as_of(
+    name: str,
+    *,
+    cutoff: datetime,
+    dedupe_on: list[str],
+    availability_col: str = "as_of",
+) -> pl.LazyFrame:
+    """Return the latest business rows that were available by ``cutoff``.
+
+    Filtering happens *before* deduplication. This ordering matters: filtering a
+    latest-wins view after the fact can drop a valid earlier revision whenever a
+    newer revision arrived after the forecast cutoff.
+    """
+    if cutoff.tzinfo is None or cutoff.utcoffset() is None:
+        raise ValueError("cutoff must be timezone-aware")
+    lf = scan(name)
+    names = lf.collect_schema().names()
+    if not names:
+        return lf
+    if availability_col not in names:
+        raise ValueError(
+            f"dataset '{name}' has no availability column '{availability_col}'"
+        )
+    missing = set(dedupe_on) - set(names)
+    if missing:
+        raise ValueError(f"dataset '{name}' missing dedupe columns: {sorted(missing)}")
+    return (
+        lf.filter(pl.col(availability_col) <= cutoff)
+        .sort(
+            [*dedupe_on, availability_col],
+            descending=[False] * len(dedupe_on) + [True],
+        )
+        .unique(subset=dedupe_on, keep="first")
+    )
+
+
+def _validate_component(value: str, *, label: str) -> str:
+    if not value or not _SAFE_COMPONENT.fullmatch(value):
+        raise ValueError(
+            f"invalid {label} {value!r}; use only letters, numbers, '.', '_', ':', or '-'"
+        )
+    return value
+
+
+def immutable_path(
+    name: str,
+    record_id: str,
+    *,
+    partitions: dict[str, str] | None = None,
+) -> Path:
+    """Resolve a deterministic parquet path for an immutable ledger record."""
+    root = dataset_path(_validate_component(name, label="dataset name"))
+    for key, value in (partitions or {}).items():
+        key = _validate_component(str(key), label="partition key")
+        value = _validate_component(str(value), label="partition value")
+        root /= f"{key}={value}"
+    return root / f"{_validate_component(record_id, label='record id')}.parquet"
+
+
+def write_immutable(
+    name: str,
+    record_id: str,
+    df: pl.DataFrame,
+    *,
+    partitions: dict[str, str] | None = None,
+) -> Path:
+    """Commit one deterministic parquet file without ever replacing it.
+
+    Exact retries are idempotent. Reusing a record ID for different content is
+    a hard failure. The temporary file is hidden from parquet scans and the
+    exclusive lock serializes compliant writers before the atomic rename.
+    """
+    if df.is_empty():
+        raise ValueError("immutable records cannot be empty")
+    dest = immutable_path(name, record_id, partitions=partitions)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if dest.exists():
+        if pl.read_parquet(dest).equals(df, null_equal=True):
+            return dest
+        raise ImmutableConflictError(
+            f"immutable record '{name}/{record_id}' already exists with different content"
+        )
+
+    lock = dest.with_suffix(".lock")
+    lock_fd = os.open(lock, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(lock_fd, "r+", encoding="utf-8") as lock_file:
+        # Keep the lock file permanently and lock its inode. Kernel locks are
+        # released when a process exits, so a crashed writer cannot strand the
+        # record. Unlinking this file would let a third writer lock a new inode
+        # while another compliant writer is still waiting on the old one.
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        tmp = dest.parent / f".{record_id}.{uuid.uuid4().hex}.tmp"
+        try:
+            if dest.exists():
+                if pl.read_parquet(dest).equals(df, null_equal=True):
+                    return dest
+                raise ImmutableConflictError(
+                    f"immutable record '{name}/{record_id}' won a conflicting race"
+                )
+
+            lock_file.seek(0)
+            lock_file.truncate()
+            lock_file.write(
+                f"pid={os.getpid()} created_at={datetime.now(tz=UTC).isoformat()}\n"
+            )
+            lock_file.flush()
+            df.write_parquet(tmp, compression="zstd")
+            # Hard-linking within the destination directory is an atomic
+            # no-clobber publish.  Unlike os.replace(), this preserves the
+            # literal immutability guarantee even if a non-compliant writer
+            # creates the destination after our under-lock recheck.
+            try:
+                os.link(tmp, dest)
+            except FileExistsError as exc:
+                if pl.read_parquet(dest).equals(df, null_equal=True):
+                    return dest
+                raise ImmutableConflictError(
+                    f"immutable record '{name}/{record_id}' appeared in a conflicting race"
+                ) from exc
+            return dest
+        finally:
+            tmp.unlink(missing_ok=True)
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def read_immutable(
+    name: str,
+    record_id: str,
+    *,
+    partitions: dict[str, str] | None = None,
+) -> pl.DataFrame:
+    """Read one deterministic immutable record or raise ``FileNotFoundError``."""
+    return pl.read_parquet(immutable_path(name, record_id, partitions=partitions))
 
 
 # --- Manifest (dedup / backfill tracking) ---------------------------------

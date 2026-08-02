@@ -17,7 +17,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 DEFAULT_HEADERS = {
-    "User-Agent": "surge/0.0.1 (+https://github.com/surge-grid/surge)",
+    "User-Agent": "surge-grid/0.2.0 (+https://github.com/tylergibbs1/surge)",
     "Accept": "application/json,text/csv,application/zip,*/*",
 }
 

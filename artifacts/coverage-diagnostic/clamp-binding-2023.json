@@ -1,0 +1,40 @@
+{
+  "per_ba": {
+    "CISO": {
+      "mean_width_added_mw": 182.26,
+      "median_adjustment_mw": 0.0,
+      "zero_clamped_fraction": 0.5435
+    },
+    "ERCO": {
+      "mean_width_added_mw": 170.81,
+      "median_adjustment_mw": 0.0,
+      "zero_clamped_fraction": 0.765
+    },
+    "ISNE": {
+      "mean_width_added_mw": 156.51,
+      "median_adjustment_mw": 0.0,
+      "zero_clamped_fraction": 0.7611
+    },
+    "MISO": {
+      "mean_width_added_mw": 488.61,
+      "median_adjustment_mw": 46.29,
+      "zero_clamped_fraction": 0.455
+    },
+    "NYIS": {
+      "mean_width_added_mw": 93.59,
+      "median_adjustment_mw": 0.0,
+      "zero_clamped_fraction": 0.7919
+    },
+    "PJM": {
+      "mean_width_added_mw": 819.95,
+      "median_adjustment_mw": 0.0,
+      "zero_clamped_fraction": 0.5599
+    },
+    "SWPP": {
+      "mean_width_added_mw": 231.14,
+      "median_adjustment_mw": 19.54,
+      "zero_clamped_fraction": 0.4603
+    }
+  },
+  "year": 2023
+}

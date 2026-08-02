@@ -1,55 +1,88 @@
 # Contributing
 
-Thanks for your interest. Surge is a small open-source project; PRs and issues
-welcome.
+Thanks for helping make Surge Grid more useful and more trustworthy. Bug
+reports, data-source corrections, methodology reviews, and focused pull
+requests are welcome.
 
 ## Development setup
 
 ```bash
-git clone https://github.com/<your-fork>/surge.git
+git clone https://github.com/tylergibbs1/surge.git
 cd surge
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate
 pip install -e ".[dev,api]"
 ```
 
-You'll need a few free API keys in `.env` (see `.env.example`):
-- `EIA_API_KEY` — register at https://www.eia.gov/opendata/register.php
-- `NREL_API_KEY` (optional) — https://developer.nrel.gov/signup/
-- `NCDC_TOKEN`  (optional) — https://www.ncdc.noaa.gov/cdo-web/token
+Copy `.env.example` to a local file that is not committed. `EIA_API_KEY` is
+required for live EIA ingestion; the other source credentials are optional for
+the corresponding adapters.
 
-## Running tests
+## Required checks
 
 ```bash
+ruff check src tests modal_app/app.py scripts/rebuild_data_snapshot.py \
+  experiments/conformal.py experiments/eval_c2.py experiments/features.py \
+  experiments/finetune_c2.py experiments/overfit.py experiments/run_c2.py \
+  experiments/run_conformal_c2.py scripts/audit_ledger.py scripts/score_ledger.py \
+  scripts/verify_forecasts.py
+mypy src modal_app/app.py
 pytest
+python -m build
 ```
 
-## Running the API locally
+Frontend changes must also pass:
 
 ```bash
-# pull enough data to run inference
-python -m surge.ingest --days 90
-
-# download a model checkpoint (separate — see docs/models.md)
-# ...
-
-uvicorn surge.api.main:app --reload
+cd web/playground
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm build
 ```
 
-## Style
+Tests must not read `~/.surge`, depend on an existing manifest, or call the
+network unless they are explicitly marked as integration tests. Use temporary
+data directories and mocked HTTP transports.
 
-- `ruff check src tests` must pass
-- `mypy src` must pass
-- Match surrounding style — small surface area, keep dependencies minimal.
+## Methodology changes
 
-## What goes in git vs. what doesn't
+Forecasting claims are part of the product surface. A PR that adds or changes a
+metric must include:
 
-- **Source code**: git
-- **Tests and fixtures**: git
-- **Benchmarks / results**: `experiments/results.tsv` is gitignored — publish to HF datasets
-- **Model weights**: gitignored — publish to HF Hub
-- **Parquet data**: gitignored — can be rebuilt via `python -m surge.ingest`
+- the evaluation lane: oracle, vintage replay, or live forward;
+- exact forecast origins, horizons, input-availability cutoffs, and actuals
+  vintage;
+- model, code, configuration, and data identifiers;
+- per-BA results alongside any aggregate;
+- a machine-readable result artifact and its SHA-256 hash;
+- a limitations note covering leakage and missingness.
 
-## Publishing
+See [docs/methodology.md](docs/methodology.md) and
+[docs/benchmark-protocol.md](docs/benchmark-protocol.md). Do not describe an
+oracle result as production, apples-to-apples, or operator-beating.
 
-- Dataset snapshots → `huggingface.co/datasets/surge-grid/*`
-- Model checkpoints → `huggingface.co/surge-grid/*`
+## Data, models, and generated files
+
+- Source code, small fixtures, and documentation belong in Git.
+- Model weights and large Parquet snapshots do not. Publish them as immutable,
+  checksummed release or Hugging Face artifacts.
+- The Python distribution is `surge-grid`; the import package is `surge`.
+- The v0.2 serving default is pinned upstream
+  [`amazon/chronos-2`](https://huggingface.co/amazon/chronos-2). Checkpoints
+  under [Tylerbry1 on Hugging Face](https://huggingface.co/Tylerbry1) are
+  legacy research artifacts unless a later release explicitly says otherwise.
+- Never publish from a personal working data directory. Build and verify a
+  snapshot with `scripts/rebuild_data_snapshot.py` as described in
+  [docs/operations.md](docs/operations.md).
+
+## Pull requests and releases
+
+Keep changes scoped and explain user-visible behavior. `main` should require
+the Python, package, and frontend checks. Before merging to `main`, the project
+workflow requires independent subagent review and resolution of the review's
+actionable concerns.
+
+Releases follow [docs/release-checklist.md](docs/release-checklist.md). PyPI
+publishing should use the protected `pypi` GitHub environment and trusted
+publishing rather than a long-lived API token.

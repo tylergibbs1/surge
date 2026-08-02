@@ -1,0 +1,188 @@
+name: release package
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  verify-tag:
+    name: Verify signed release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+      - name: Require a verified annotated tag on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          tag_type="$(jq -r '.object.type' <<<"$ref_json")"
+          tag_sha="$(jq -r '.object.sha' <<<"$ref_json")"
+          if [ "$tag_type" != "tag" ]; then
+            echo "::error::Release tag must be annotated and signed; lightweight tags are rejected."
+            exit 1
+          fi
+          tag_json="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha")"
+          if [ "$(jq -r '.verification.verified' <<<"$tag_json")" != "true" ]; then
+            echo "::error::GitHub did not verify the release-tag signature."
+            jq '.verification' <<<"$tag_json"
+            exit 1
+          fi
+          tagged_commit="$(jq -r '.object.sha' <<<"$tag_json")"
+          checked_out_commit="$(git rev-parse HEAD)"
+          if [ "$tagged_commit" != "$checked_out_commit" ]; then
+            echo "::error::Checked-out commit does not match the verified tag object."
+            exit 1
+          fi
+
+  python-quality:
+    name: Release Python quality
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - name: Ruff
+        run: |
+          ruff check src tests modal_app/app.py \
+            experiments/conformal.py experiments/eval_c2.py \
+            experiments/features.py experiments/finetune_c2.py \
+            experiments/overfit.py experiments/run_c2.py \
+            experiments/run_conformal_c2.py experiments/select_c2_candidate.py \
+            scripts/rebuild_data_snapshot.py scripts/audit_ledger.py \
+            scripts/score_ledger.py scripts/verify_forecasts.py \
+            scripts/check_runtime_stack.py
+      - run: mypy src modal_app/app.py
+
+  python-tests:
+    name: Release Python ${{ matrix.python }} tests
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install -e ".[dev]"
+      - run: pytest
+
+  runtime-stack:
+    name: Release pinned runtime import smoke
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install the known-good runtime stack
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.8.0"
+          python -m pip install -e ".[api,train]"
+      - run: python -m pip check
+      - run: python scripts/check_runtime_stack.py
+
+  frontend:
+    name: Release frontend
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web/playground
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: web/playground/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  build:
+    name: Build release artifacts
+    needs: verify-tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import runpy
+
+          tag = os.environ["RELEASE_TAG"]
+          version = runpy.run_path("src/surge/_version.py")["__version__"]
+          if tag != f"v{version}":
+              raise SystemExit(f"release tag {tag!r} does not match package v{version}")
+          PY
+      - run: python -m build
+      - run: twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [build, python-quality, python-tests, runtime-stack, frontend]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/surge-grid/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-package
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

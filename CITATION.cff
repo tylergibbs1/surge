@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use Surge Grid, cite this software and the exact model and data revisions used."
+title: "Surge Grid"
+type: software
+version: 0.2.0
+authors:
+  - family-names: Gibbs
+    given-names: Tyler
+repository-code: "https://github.com/tylergibbs1/surge"
+url: "https://surgeforecast.com"
+license: MIT
+keywords:
+  - electricity
+  - load forecasting
+  - power grid
+  - probabilistic forecasting
+  - EIA-930

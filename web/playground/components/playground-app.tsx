@@ -14,14 +14,18 @@ const GridMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="border-border bg-muted/30 h-[420px] w-full animate-pulse rounded-lg border" />
+      <div className="h-[420px] w-full animate-pulse rounded-lg border border-border bg-muted/30" />
     ),
-  },
+  }
 )
 
 const VALID_BAS = new Set<string>(BAS as readonly string[])
 
-export function PlaygroundApp() {
+export function PlaygroundApp({
+  preserveDetailRoute = false,
+}: {
+  preserveDetailRoute?: boolean
+}) {
   // Honor ?ba=XXX&horizon=NN from the URL — this is how /grid deep-links
   // into the map view after a card click.
   const params = useSearchParams()
@@ -45,17 +49,23 @@ export function PlaygroundApp() {
   const pathname = usePathname()
   useEffect(() => {
     const p = new URLSearchParams()
-    if (ba !== "PJM") p.set("ba", ba)
+    // The v0.2 homepage occupies bare `/`. When this component is mounted as
+    // the compatibility detail view, retain a BA parameter even for PJM so a
+    // URL update cannot accidentally navigate back to the scoreboard.
+    if (preserveDetailRoute || ba !== "PJM") p.set("ba", ba)
     if (horizon !== 24) p.set("horizon", String(horizon))
     const qs = p.toString()
     const target = qs ? `${pathname}?${qs}` : pathname
     // Only replace when the target actually differs from the current URL
     // — otherwise every render re-enters the router and snuffs scroll
     // restoration.
-    if (typeof window !== "undefined" && target !== window.location.pathname + window.location.search) {
+    if (
+      typeof window !== "undefined" &&
+      target !== window.location.pathname + window.location.search
+    ) {
       router.replace(target, { scroll: false })
     }
-  }, [ba, horizon, pathname, router])
+  }, [ba, horizon, pathname, preserveDetailRoute, router])
 
   return (
     <div className="space-y-6">

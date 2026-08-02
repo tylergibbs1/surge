@@ -3,66 +3,94 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "surge"
-version = "0.0.1"
-description = "Open forecasts and simulations for the US power grid"
+name = "surge-grid"
+dynamic = ["version"]
+description = "Open, auditable forecasts and data tools for the US power grid"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "Surge contributors" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Tyler Gibbs and Surge contributors" }]
 keywords = ["grid", "energy", "forecasting", "electricity", "iso", "eia"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
+    "holidays>=0.55",
     "httpx>=0.27",
+    "numpy>=1.26",
     "polars>=1.0",
     "pyarrow>=16.0",
     "pydantic>=2.6",
+    "rich>=13.7",
     "tenacity>=9.0",
     "platformdirs>=4.0",
     "tqdm>=4.66",
+    "typer>=0.12",
     "zstandard>=0.22",
 ]
 
 [project.optional-dependencies]
 dev = [
+    "fastapi>=0.115",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-vcr>=1.0",
     "ruff>=0.6",
+    "slowapi>=0.1.9",
     "mypy>=1.10",
 ]
 weather = ["herbie-data>=2024.3", "cdsapi>=0.7"]
-cli = ["typer>=0.12", "rich>=13.7"]
 api = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "slowapi>=0.1.9",
-    "chronos-forecasting",
-    # torch>=2.6: below this version torch.load defaults to
-    # weights_only=False, which permits arbitrary code execution when
-    # loading a pickled checkpoint. Some chronos variants ship pickled
-    # files; pinning >=2.6 forces the safe default.
-    "torch>=2.6",
-    "holidays>=0.55",
+    # Known-good H100 inference stack. Keep this synchronized with the train
+    # extra, the Modal image, and scripts/check_runtime_stack.py.
+    "chronos-forecasting==2.3.1",
+    "holidays==0.101",
+    "numpy==2.1.2",
+    "peft==0.20.0",
+    "polars==1.43.2",
+    "pyarrow==25.0.0",
+    "torch==2.8.0",
+    "transformers==4.57.6",
 ]
-all = ["surge[dev,weather,cli,api]"]
+train = [
+    "chronos-forecasting==2.3.1",
+    "holidays==0.101",
+    "numpy==2.1.2",
+    "peft==0.20.0",
+    "polars==1.43.2",
+    "pyarrow==25.0.0",
+    "torch==2.8.0",
+    "transformers==4.57.6",
+]
+all = ["surge-grid[dev,weather,api,train]"]
 
 [project.scripts]
-surge = "surge.cli:app"
+surge-grid = "surge.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/surge-grid/surge"
-Repository = "https://github.com/surge-grid/surge"
+Homepage = "https://surgeforecast.com"
+Repository = "https://github.com/tylergibbs1/surge"
+Documentation = "https://github.com/tylergibbs1/surge/tree/main/docs"
+Issues = "https://github.com/tylergibbs1/surge/issues"
+Changelog = "https://github.com/tylergibbs1/surge/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/surge/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/surge"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/web/playground/tsconfig.tsbuildinfo"]
 
 [tool.ruff]
 line-length = 100

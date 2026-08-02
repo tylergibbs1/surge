@@ -27,7 +27,7 @@ export const runtime = "nodejs"
 
 const API =
   process.env.SURGE_API_URL ??
-  "https://tylergibbs1--surge-api-fastapi-app.modal.run"
+  "https://tylergibbs1--surge-api-v02-fastapi-app.modal.run"
 const RUNPOD_KEY = process.env.RUNPOD_API_KEY
 
 // Max age of a baked payload we'll serve. Bake runs once a day (~06:15 UTC);
@@ -38,6 +38,7 @@ const BAKED_MAX_AGE_MS = 25 * 60 * 60 * 1000
 // Host allow-list: prevents bearer-token exfil or SSRF if SURGE_API_URL
 // is misconfigured. Vercel Blob's public CDN is whitelisted separately.
 const ALLOWED_UPSTREAM_HOSTS = new Set([
+  "tylergibbs1--surge-api-v02-fastapi-app.modal.run",
   "tylergibbs1--surge-api-fastapi-app.modal.run",
   "api.runpod.ai",
   "127.0.0.1",
@@ -52,6 +53,9 @@ const ALLOWED_UPSTREAM_HOSTS = new Set([
     if (!ALLOWED_UPSTREAM_HOSTS.has(u.hostname)) {
       throw new Error(`upstream host ${u.hostname} not in allow-list`)
     }
+    if (u.pathname !== "/" || u.search || u.hash || u.username || u.password) {
+      throw new Error("upstream must be an origin without path, query, or credentials")
+    }
   } catch (e) {
     throw new Error(`invalid SURGE_API_URL=${API}: ${String(e)}`)
   }
@@ -65,6 +69,7 @@ const CACHE_HEADERS = {
 const BA_SET = new Set<string>(BAS as readonly string[])
 
 type ForecastResponse = {
+  run_id?: string
   ba: string
   model: string
   as_of_utc: string
@@ -91,7 +96,11 @@ type BakedResult =
   | { ok: true; payload: ForecastResponse }
   | { ok: false; reason: string }
 
-async function fetchBaked(ba: BaCode, horizon: number): Promise<BakedResult> {
+async function fetchBaked(
+  ba: BaCode,
+  horizon: number,
+  expectedRunId?: string,
+): Promise<BakedResult> {
   if (!BLOB_TOKEN) return { ok: false, reason: "no-token" }
 
   // Private-store lookup: head() hits the Vercel Blob API and returns a
@@ -109,13 +118,26 @@ async function fetchBaked(ba: BaCode, horizon: number): Promise<BakedResult> {
   // Private-store fetches require the read-write token in the
   // Authorization header. @vercel/blob's head() doesn't pre-sign the URL
   // like S3 does — the token gates every read.
-  const r = await fetch(blobUrl, {
-    headers: { authorization: `Bearer ${BLOB_TOKEN}` },
-    next: { revalidate: 60 },
-  })
+  const parsedUrl = new URL(blobUrl)
+  if (expectedRunId) parsedUrl.searchParams.set("surge_release", expectedRunId)
+  const r = await fetch(
+    parsedUrl,
+    expectedRunId
+      ? {
+          headers: { authorization: `Bearer ${BLOB_TOKEN}` },
+          cache: "no-store",
+        }
+      : {
+          headers: { authorization: `Bearer ${BLOB_TOKEN}` },
+          next: { revalidate: 60 },
+        },
+  )
   if (!r.ok) return { ok: false, reason: `fetch-${r.status}` }
 
   const payload = (await r.json()) as ForecastResponse
+  if (expectedRunId && payload.run_id !== expectedRunId) {
+    return { ok: false, reason: "run-mismatch" }
+  }
 
   // Stale check: don't silently serve forecasts from last week if the bake
   // cron has been broken.
@@ -183,6 +205,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   const horizonRaw = req.nextUrl.searchParams.get("horizon") ?? "24"
   const horizon = Number.parseInt(horizonRaw, 10)
   const force = req.nextUrl.searchParams.get("force") === "1"
+  const expectedRunId = req.nextUrl.searchParams.get("run_id") ?? undefined
 
   if (!ba || !BA_SET.has(ba)) {
     return errorResponse(
@@ -202,12 +225,12 @@ export async function GET(req: NextRequest): Promise<Response> {
   let blobReason = "skipped"
   if (!force) {
     try {
-      const baked = await fetchBaked(ba as BaCode, horizon)
+      const baked = await fetchBaked(ba as BaCode, horizon, expectedRunId)
       if (baked.ok) {
         return new Response(JSON.stringify(baked.payload), {
           status: 200,
           headers: {
-            ...CACHE_HEADERS,
+            ...(expectedRunId ? { "cache-control": "no-store" } : CACHE_HEADERS),
             "content-type": "application/json",
             "x-surge-backend": "blob",
           },
@@ -219,6 +242,15 @@ export async function GET(req: NextRequest): Promise<Response> {
       // to live inference.
       blobReason = `exc:${String(e).slice(0, 40)}`
     }
+  }
+
+  // A release assertion must never silently replace the requested immutable
+  // run with live inference or a prior cached compatibility mirror.
+  if (expectedRunId) {
+    return errorResponse(
+      { error: "requested published run is unavailable", detail: blobReason },
+      503,
+    )
   }
 
   // Slow path: call Modal or RunPod.

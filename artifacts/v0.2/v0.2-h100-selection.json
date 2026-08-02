@@ -1,0 +1,114 @@
+{
+  "candidates": [
+    {
+      "candidate": "official-lora-1000",
+      "manifest_sha256": "7de1d91390340597c9d34235cb08a077352d45c723f32e6c9574e8ce2106d7a5",
+      "num_steps": 1000,
+      "overfit_audit_sha256": "4850285903bcd52aeaaf82da58b3bc424f03c26510ffa88cc545857751bf894c",
+      "promotion_eligible": true,
+      "promotion_marker_sha256": "4c48d8f04a70244c8db6af967ff258b79df4b19b541fb9f93d17c4e072ad6d62",
+      "rejection_reasons": [],
+      "selection_score": 0.9829746249582003,
+      "validation_mase_vs_base_ratio": 0.9830583526658824,
+      "validation_scaled_wis_vs_base_ratio": 0.9828908972505183
+    },
+    {
+      "candidate": "official-lora-2000",
+      "manifest_sha256": "38500fa5b6f0e7c03832ee2a8467f51fc92628fef0d8876f7938f150e3bfb59d",
+      "num_steps": 2000,
+      "overfit_audit_sha256": "86462ed7ea024c3280ae4088ef7df0bb6efb0d9d97c5efc64bd4f34b74ff4aa5",
+      "promotion_eligible": true,
+      "promotion_marker_sha256": "72ff9ba0591ac1d484ab59790f596939875675791e7d0d0145fa2de554da7333",
+      "rejection_reasons": [],
+      "selection_score": 0.9722636478503976,
+      "validation_mase_vs_base_ratio": 0.9729391562942239,
+      "validation_scaled_wis_vs_base_ratio": 0.9715881394065714
+    }
+  ],
+  "created_at_utc": "2026-08-02T04:00:58.445577+00:00",
+  "fallback": null,
+  "locked_test_opened": false,
+  "policy_version": "surge-v0.2-frozen-h100-selection-v1",
+  "schema_version": 1,
+  "selection_rule": "minimum 0.5*(validation MASE/base MASE) + 0.5*(validation scaled WIS/base scaled WIS); six-decimal tie chooses fewer steps",
+  "training_identity": {
+    "bas": [
+      "PJM",
+      "CISO",
+      "ERCO",
+      "MISO",
+      "NYIS",
+      "ISNE",
+      "SWPP"
+    ],
+    "base_model": "amazon/chronos-2",
+    "base_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+    "code_revision": "e6022e494ee79bb10f228bc2fead0d25b905fdd0",
+    "data_snapshot_sha256": "77d80d4031e2391808103ef29bb182b3ee2469cec1c24ae00569d217bd48a4c0",
+    "feature_spec_sha256": "84a740bfe11062e6db03ac8ea61fe727f0c587abed4de89eff3e5c295054cdeb",
+    "feature_spec_version": "load-v2-core",
+    "runtime": {
+      "chronos_fit": {
+        "bf16": true,
+        "data_seed": 42,
+        "disable_data_parallel": true,
+        "full_determinism": true,
+        "seed": 42,
+        "tf32": true
+      },
+      "system": {
+        "accelerator_count": 1,
+        "accelerators": [
+          {
+            "capability": [
+              9,
+              0
+            ],
+            "index": 0,
+            "name": "NVIDIA H100 80GB HBM3",
+            "total_memory_bytes": 84929216512
+          }
+        ],
+        "cublas_workspace_config": ":4096:8",
+        "cuda_available": true,
+        "cuda_matmul_allow_tf32": true,
+        "cudnn_allow_tf32": true,
+        "cudnn_benchmark": false,
+        "cudnn_deterministic": true,
+        "default_dtype": "torch.float32",
+        "deterministic_algorithms": true,
+        "float32_matmul_precision": "high",
+        "platform_machine": "x86_64",
+        "platform_release": "6.8.0-52-generic",
+        "platform_system": "Linux",
+        "python_executable_name": "python",
+        "python_implementation": "CPython",
+        "python_version": "3.12.3",
+        "torch_cuda_version": "12.8",
+        "torch_cudnn_version": 91002
+      }
+    },
+    "versions": {
+      "chronos-forecasting": "2.3.1",
+      "holidays": "0.101",
+      "numpy": "2.1.2",
+      "peft": "0.20.0",
+      "polars": "1.43.2",
+      "pyarrow": "25.0.0",
+      "torch": "2.8.0+cu128",
+      "transformers": "4.57.6"
+    }
+  },
+  "winner": {
+    "candidate": "official-lora-2000",
+    "manifest_sha256": "38500fa5b6f0e7c03832ee2a8467f51fc92628fef0d8876f7938f150e3bfb59d",
+    "num_steps": 2000,
+    "overfit_audit_sha256": "86462ed7ea024c3280ae4088ef7df0bb6efb0d9d97c5efc64bd4f34b74ff4aa5",
+    "promotion_eligible": true,
+    "promotion_marker_sha256": "72ff9ba0591ac1d484ab59790f596939875675791e7d0d0145fa2de554da7333",
+    "rejection_reasons": [],
+    "selection_score": 0.9722636478503976,
+    "validation_mase_vs_base_ratio": 0.9729391562942239,
+    "validation_scaled_wis_vs_base_ratio": 0.9715881394065714
+  }
+}

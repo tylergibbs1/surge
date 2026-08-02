@@ -1,0 +1,366 @@
+{
+  "artifact_files": [
+    {
+      "bytes": 5156,
+      "path": "README.md",
+      "sha256": "93091bbd7fddd79f923362c105c452072f82f73e4f88a68623a1c68a39524164"
+    },
+    {
+      "bytes": 1302,
+      "path": "adapter_config.json",
+      "sha256": "04cf78fafcc87a0f8ad188b00d78f24f3e104e9f11a8da43c3accb41b04f461d"
+    },
+    {
+      "bytes": 4854584,
+      "path": "adapter_model.safetensors",
+      "sha256": "02698ee89b8c76a0de2ae47db4a1bfc376a61ee9ea11093e346175cc4be4f7d0"
+    }
+  ],
+  "availability_mode": "retrospective_final",
+  "bas": [
+    "PJM",
+    "CISO",
+    "ERCO",
+    "MISO",
+    "NYIS",
+    "ISNE",
+    "SWPP"
+  ],
+  "base_model": "amazon/chronos-2",
+  "base_model_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+  "base_model_source": "amazon/chronos-2",
+  "code_revision": "e6022e494ee79bb10f228bc2fead0d25b905fdd0",
+  "config": {
+    "batch_size": 32,
+    "checkpoint_selection_disjoint_from_promotion": true,
+    "complete_target_origins_only": true,
+    "context": 2048,
+    "diagnostic_batch_size": 16,
+    "diagnostic_origins": 90,
+    "diagnostic_step": 24,
+    "horizon": 24,
+    "learning_rate": 1e-05,
+    "mode": "lora",
+    "num_steps": 2000,
+    "seed": 42,
+    "shared_origin_schedule": true,
+    "with_generation": false
+  },
+  "created_at_utc": "2026-08-02T03:59:58.499806+00:00",
+  "data": {
+    "CISO": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 24,
+      "missing_temperature": 27,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:04:18.480022+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52606,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:03:30.348090+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61341,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    },
+    "ERCO": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 1,
+      "missing_temperature": 90,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:09:47.323941+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52607,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:04:55.677907+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61257,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    },
+    "ISNE": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 5,
+      "missing_temperature": 71,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:16:42.361071+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52607,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:09:05.361295+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61287,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    },
+    "MISO": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 35,
+      "missing_temperature": 56,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:12:03.623662+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52608,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:06:18.573110+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61285,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    },
+    "NYIS": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 6,
+      "missing_temperature": 16,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:14:16.682295+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52607,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:07:39.254445+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61354,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    },
+    "PJM": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 126,
+      "missing_temperature": 63,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:01:48.846609+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52607,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:02:01.758791+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61286,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    },
+    "SWPP": {
+      "locked_test_rows_materialized": 0,
+      "missing_target": 27,
+      "missing_temperature": 121,
+      "provenance": {
+        "load_hourly": {
+          "dataset": "load_hourly",
+          "max_available_at_utc": "2026-05-10 17:19:05.779096+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 52607,
+          "sources": [
+            "eia-930"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2019-01-01 00:00:00+00:00"
+        },
+        "weather_hourly": {
+          "dataset": "weather_hourly",
+          "max_available_at_utc": "2026-05-10 19:10:32.739927+00:00",
+          "observed_end_utc": "2024-12-31 23:00:00+00:00",
+          "rows": 61226,
+          "sources": [
+            "asos-iowa"
+          ],
+          "valid_end_utc": "2024-12-31 23:00:00+00:00",
+          "valid_start_utc": "2018-01-01 00:00:00+00:00"
+        }
+      },
+      "rows": 52608,
+      "selection_end_utc": "2024-12-31T23:00:00.000000",
+      "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+      "start_utc": "2019-01-01T00:00:00.000000",
+      "train_end": 43824,
+      "validation_end": 52608
+    }
+  },
+  "data_snapshot_sha256": "77d80d4031e2391808103ef29bb182b3ee2469cec1c24ae00569d217bd48a4c0",
+  "feature_spec_sha256": "84a740bfe11062e6db03ac8ea61fe727f0c587abed4de89eff3e5c295054cdeb",
+  "feature_spec_version": "load-v2-core",
+  "locked_test_opened": false,
+  "model_artifact_hash_algorithm": "sha256-tree-v1",
+  "model_artifact_sha256": "c6fddf8a035bb72a3cda926a697b4f9dfec0811b079c796e7e953040685df27a",
+  "point_in_time_replay": false,
+  "runtime": {
+    "chronos_fit": {
+      "bf16": true,
+      "data_seed": 42,
+      "disable_data_parallel": true,
+      "full_determinism": true,
+      "seed": 42,
+      "tf32": true
+    },
+    "system": {
+      "accelerator_count": 1,
+      "accelerators": [
+        {
+          "capability": [
+            9,
+            0
+          ],
+          "index": 0,
+          "name": "NVIDIA H100 80GB HBM3",
+          "total_memory_bytes": 84929216512
+        }
+      ],
+      "cublas_workspace_config": ":4096:8",
+      "cuda_available": true,
+      "cuda_matmul_allow_tf32": true,
+      "cudnn_allow_tf32": true,
+      "cudnn_benchmark": false,
+      "cudnn_deterministic": true,
+      "default_dtype": "torch.float32",
+      "deterministic_algorithms": true,
+      "float32_matmul_precision": "high",
+      "platform_machine": "x86_64",
+      "platform_release": "6.8.0-52-generic",
+      "platform_system": "Linux",
+      "python_executable_name": "python",
+      "python_implementation": "CPython",
+      "python_version": "3.12.3",
+      "torch_cuda_version": "12.8",
+      "torch_cudnn_version": 91002
+    }
+  },
+  "schema_version": 1,
+  "selection": {
+    "checkpoint_state": "promoted",
+    "diagnostics_error": null,
+    "overfit_audit": "surge-overfit-audit.json",
+    "overfit_audit_sha256": "86462ed7ea024c3280ae4088ef7df0bb6efb0d9d97c5efc64bd4f34b74ff4aa5",
+    "policy_version": "surge-v0.2-overfit-gate-v1",
+    "promotion_eligible": true
+  },
+  "selection_valid_before_utc": "2025-01-01T00:00:00+00:00",
+  "versions": {
+    "chronos-forecasting": "2.3.1",
+    "holidays": "0.101",
+    "numpy": "2.1.2",
+    "peft": "0.20.0",
+    "polars": "1.43.2",
+    "pyarrow": "25.0.0",
+    "torch": "2.8.0+cu128",
+    "transformers": "4.57.6"
+  },
+  "wall_seconds": 387.929
+}

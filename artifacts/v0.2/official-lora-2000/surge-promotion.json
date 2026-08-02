@@ -1,0 +1,13 @@
+{
+  "checkpoint": "best",
+  "manifest": "surge-training-manifest.json",
+  "manifest_sha256": "38500fa5b6f0e7c03832ee2a8467f51fc92628fef0d8876f7938f150e3bfb59d",
+  "model_artifact_hash_algorithm": "sha256-tree-v1",
+  "model_artifact_sha256": "c6fddf8a035bb72a3cda926a697b4f9dfec0811b079c796e7e953040685df27a",
+  "overfit_audit": "surge-overfit-audit.json",
+  "overfit_audit_sha256": "86462ed7ea024c3280ae4088ef7df0bb6efb0d9d97c5efc64bd4f34b74ff4aa5",
+  "policy_version": "surge-v0.2-overfit-gate-v1",
+  "promotion_eligible": true,
+  "schema_version": 1,
+  "test_opened": false
+}

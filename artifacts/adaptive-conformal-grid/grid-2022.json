@@ -1,0 +1,2689 @@
+{
+  "availability_mode": "retrospective_final",
+  "bas": [
+    "PJM",
+    "CISO",
+    "ERCO",
+    "MISO",
+    "NYIS",
+    "ISNE",
+    "SWPP"
+  ],
+  "code_revision": "9c152cb1eaacc44ba5f42e3530ff536cd6a6a31e",
+  "cohort": {
+    "note": "training-lane years for the fine-tune, but the calibrated model is the pinned zero-shot upstream base, which Surge never trains",
+    "origin_count": 365,
+    "scored_origin_end_utc": "2022-12-31T00:00:00.000000",
+    "scored_origin_start_utc": "2022-02-01T00:00:00.000000",
+    "used_by_any_calibration_search": false,
+    "year": 2022
+  },
+  "context": 2048,
+  "coverage_tolerance": 0.02,
+  "data_snapshot_sha256": "77d80d4031e2391808103ef29bb182b3ee2469cec1c24ae00569d217bd48a4c0",
+  "frozen_policy": {
+    "alpha_scope": [
+      "per-series",
+      "per-lead"
+    ],
+    "gamma": [
+      0.02,
+      0.05,
+      0.1,
+      0.2
+    ],
+    "min_history_mature_origins": 28,
+    "single_policy_replication": false,
+    "source": "artifacts/adaptive-conformal-validation.json",
+    "window_mature_origins": [
+      56,
+      168
+    ]
+  },
+  "held_out_test_lane": "not-opened",
+  "horizon": 24,
+  "model": "amazon/chronos-2",
+  "model_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+  "negative_adjustment_policy": "clamp-to-zero-no-interval-shrink",
+  "outcome_delay_hours": 72,
+  "outcome_timing_policy_reference": "eia-latest-at-plus72h-v1",
+  "point_in_time_replay": false,
+  "policies_meeting_coverage_bar": [
+    "adaptive/series/g0.02/w168",
+    "adaptive/series/g0.02/w56",
+    "adaptive/series/g0.05/w168",
+    "adaptive/series/g0.05/w56",
+    "adaptive/series/g0.1/w168",
+    "adaptive/series/g0.1/w56",
+    "adaptive/series/g0.2/w168",
+    "adaptive/series/g0.2/w56"
+  ],
+  "policy_count": 18,
+  "protocol": "policy-grid-characterization-on-an-unsearched-cohort",
+  "results": {
+    "adaptive/lead/g0.02/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.809942,
+        "interval_score": 5742.099003,
+        "mean_width": 4094.575379,
+        "n_points": 56083,
+        "wis": 793.519057
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": 0.2992,
+      "macro_interval_score_improvement_pct": 0.2992,
+      "macro_relative_interval_score": 0.997008,
+      "max_per_ba_coverage_error": 0.029217,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.804193,
+            "interval_score": 2872.182531,
+            "mean_width": 2014.770787,
+            "n_points": 8013,
+            "wis": 394.056511
+          },
+          "coverage_error": 0.004193
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.808508,
+            "interval_score": 7776.2478,
+            "mean_width": 5406.801979,
+            "n_points": 8016,
+            "wis": 1072.334252
+          },
+          "coverage_error": 0.008508
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.829217,
+            "interval_score": 2757.139614,
+            "mean_width": 2093.673104,
+            "n_points": 8016,
+            "wis": 390.469413
+          },
+          "coverage_error": 0.029217
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.801323,
+            "interval_score": 7354.777253,
+            "mean_width": 5267.971432,
+            "n_points": 8013,
+            "wis": 1029.250305
+          },
+          "coverage_error": 0.001323
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.80726,
+            "interval_score": 2641.362205,
+            "mean_width": 1907.202847,
+            "n_points": 8016,
+            "wis": 368.590822
+          },
+          "coverage_error": 0.00726
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.816089,
+            "interval_score": 12738.570495,
+            "mean_width": 9125.87499,
+            "n_points": 7993,
+            "wis": 1736.097252
+          },
+          "coverage_error": 0.016089
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.803019,
+            "interval_score": 4074.01731,
+            "mean_width": 2859.8294,
+            "n_points": 8016,
+            "wis": 566.478072
+          },
+          "coverage_error": 0.003019
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/lead/g0.02/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.812671,
+        "interval_score": 5754.350642,
+        "mean_width": 4143.912066,
+        "n_points": 56083,
+        "wis": 794.335833
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": 0.0114,
+      "macro_interval_score_improvement_pct": 0.0114,
+      "macro_relative_interval_score": 0.999886,
+      "max_per_ba_coverage_error": 0.029716,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.806814,
+            "interval_score": 2887.222619,
+            "mean_width": 2023.467405,
+            "n_points": 8013,
+            "wis": 395.059183
+          },
+          "coverage_error": 0.006814
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.81275,
+            "interval_score": 7777.081597,
+            "mean_width": 5503.310051,
+            "n_points": 8016,
+            "wis": 1072.389839
+          },
+          "coverage_error": 0.01275
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.829716,
+            "interval_score": 2771.307643,
+            "mean_width": 2126.051458,
+            "n_points": 8016,
+            "wis": 391.413948
+          },
+          "coverage_error": 0.029716
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.806939,
+            "interval_score": 7376.472069,
+            "mean_width": 5351.545724,
+            "n_points": 8013,
+            "wis": 1030.696626
+          },
+          "coverage_error": 0.006939
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.809256,
+            "interval_score": 2647.907648,
+            "mean_width": 1925.486111,
+            "n_points": 8016,
+            "wis": 369.027185
+          },
+          "coverage_error": 0.009256
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.81734,
+            "interval_score": 12753.094129,
+            "mean_width": 9175.889913,
+            "n_points": 7993,
+            "wis": 1737.065495
+          },
+          "coverage_error": 0.01734
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.805888,
+            "interval_score": 4086.984071,
+            "mean_width": 2915.730236,
+            "n_points": 8016,
+            "wis": 567.342523
+          },
+          "coverage_error": 0.005888
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/lead/g0.05/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.813295,
+        "interval_score": 5785.161675,
+        "mean_width": 4171.329296,
+        "n_points": 56083,
+        "wis": 796.389902
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -0.4802,
+      "macro_interval_score_improvement_pct": -0.4802,
+      "macro_relative_interval_score": 1.004802,
+      "max_per_ba_coverage_error": 0.02984,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.810308,
+            "interval_score": 2888.263015,
+            "mean_width": 2042.288123,
+            "n_points": 8013,
+            "wis": 395.128543
+          },
+          "coverage_error": 0.010308
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.812001,
+            "interval_score": 7841.085868,
+            "mean_width": 5557.729526,
+            "n_points": 8016,
+            "wis": 1076.65679
+          },
+          "coverage_error": 0.012001
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.82984,
+            "interval_score": 2787.476024,
+            "mean_width": 2122.714917,
+            "n_points": 8016,
+            "wis": 392.49184
+          },
+          "coverage_error": 0.02984
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.805566,
+            "interval_score": 7392.506524,
+            "mean_width": 5397.742635,
+            "n_points": 8013,
+            "wis": 1031.76559
+          },
+          "coverage_error": 0.005566
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.813124,
+            "interval_score": 2662.881223,
+            "mean_width": 1943.760706,
+            "n_points": 8016,
+            "wis": 370.025423
+          },
+          "coverage_error": 0.013124
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.81709,
+            "interval_score": 12832.153675,
+            "mean_width": 9231.864963,
+            "n_points": 7993,
+            "wis": 1742.336131
+          },
+          "coverage_error": 0.01709
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.80514,
+            "interval_score": 4111.502444,
+            "mean_width": 2917.386394,
+            "n_points": 8016,
+            "wis": 568.977081
+          },
+          "coverage_error": 0.00514
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/lead/g0.05/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.815131,
+        "interval_score": 5804.561909,
+        "mean_width": 4205.135539,
+        "n_points": 56083,
+        "wis": 797.683251
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -0.8588,
+      "macro_interval_score_improvement_pct": -0.8588,
+      "macro_relative_interval_score": 1.008588,
+      "max_per_ba_coverage_error": 0.030589,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.812055,
+            "interval_score": 2894.486911,
+            "mean_width": 2036.954969,
+            "n_points": 8013,
+            "wis": 395.543469
+          },
+          "coverage_error": 0.012055
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.814371,
+            "interval_score": 7848.337797,
+            "mean_width": 5582.456097,
+            "n_points": 8016,
+            "wis": 1077.140252
+          },
+          "coverage_error": 0.014371
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.830589,
+            "interval_score": 2804.68849,
+            "mean_width": 2152.845426,
+            "n_points": 8016,
+            "wis": 393.639338
+          },
+          "coverage_error": 0.030589
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.808436,
+            "interval_score": 7414.881666,
+            "mean_width": 5412.276279,
+            "n_points": 8013,
+            "wis": 1033.257266
+          },
+          "coverage_error": 0.008436
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.81487,
+            "interval_score": 2675.453069,
+            "mean_width": 1967.129897,
+            "n_points": 8016,
+            "wis": 370.863546
+          },
+          "coverage_error": 0.01487
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.81759,
+            "interval_score": 12878.627337,
+            "mean_width": 9328.121938,
+            "n_points": 7993,
+            "wis": 1745.434375
+          },
+          "coverage_error": 0.01759
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.808009,
+            "interval_score": 4135.269002,
+            "mean_width": 2970.503685,
+            "n_points": 8016,
+            "wis": 570.561518
+          },
+          "coverage_error": 0.008009
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/lead/g0.1/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.817717,
+        "interval_score": 5885.329267,
+        "mean_width": 4317.652608,
+        "n_points": 56083,
+        "wis": 803.067741
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -2.3302,
+      "macro_interval_score_improvement_pct": -2.3302,
+      "macro_relative_interval_score": 1.023302,
+      "max_per_ba_coverage_error": 0.031587,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.816174,
+            "interval_score": 2937.487364,
+            "mean_width": 2125.520471,
+            "n_points": 8013,
+            "wis": 398.410166
+          },
+          "coverage_error": 0.016174
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.81749,
+            "interval_score": 8005.305792,
+            "mean_width": 5749.434445,
+            "n_points": 8016,
+            "wis": 1087.604785
+          },
+          "coverage_error": 0.01749
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.831587,
+            "interval_score": 2865.38049,
+            "mean_width": 2182.965409,
+            "n_points": 8016,
+            "wis": 397.685471
+          },
+          "coverage_error": 0.031587
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.810683,
+            "interval_score": 7515.665301,
+            "mean_width": 5577.916373,
+            "n_points": 8013,
+            "wis": 1039.976175
+          },
+          "coverage_error": 0.010683
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.81774,
+            "interval_score": 2711.434348,
+            "mean_width": 2011.041831,
+            "n_points": 8016,
+            "wis": 373.262298
+          },
+          "coverage_error": 0.01774
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.818591,
+            "interval_score": 13012.2556,
+            "mean_width": 9568.384402,
+            "n_points": 7993,
+            "wis": 1754.342926
+          },
+          "coverage_error": 0.018591
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.811751,
+            "interval_score": 4169.731909,
+            "mean_width": 3023.022294,
+            "n_points": 8016,
+            "wis": 572.859045
+          },
+          "coverage_error": 0.011751
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/lead/g0.1/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.819856,
+        "interval_score": 5920.94478,
+        "mean_width": 4376.205729,
+        "n_points": 56083,
+        "wis": 805.442109
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -2.9103,
+      "macro_interval_score_improvement_pct": -2.9103,
+      "macro_relative_interval_score": 1.029103,
+      "max_per_ba_coverage_error": 0.033957,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.81817,
+            "interval_score": 2952.207502,
+            "mean_width": 2144.482186,
+            "n_points": 8013,
+            "wis": 399.391509
+          },
+          "coverage_error": 0.01817
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.819611,
+            "interval_score": 8013.967582,
+            "mean_width": 5772.044111,
+            "n_points": 8016,
+            "wis": 1088.182238
+          },
+          "coverage_error": 0.019611
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.833957,
+            "interval_score": 2868.478204,
+            "mean_width": 2180.666505,
+            "n_points": 8016,
+            "wis": 397.891985
+          },
+          "coverage_error": 0.033957
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.813803,
+            "interval_score": 7562.796524,
+            "mean_width": 5664.482514,
+            "n_points": 8013,
+            "wis": 1043.118257
+          },
+          "coverage_error": 0.013803
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.81986,
+            "interval_score": 2734.237267,
+            "mean_width": 2042.908457,
+            "n_points": 8016,
+            "wis": 374.782493
+          },
+          "coverage_error": 0.01986
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.820968,
+            "interval_score": 13128.162967,
+            "mean_width": 9765.949199,
+            "n_points": 7993,
+            "wis": 1762.070084
+          },
+          "coverage_error": 0.020968
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.812625,
+            "interval_score": 4206.946218,
+            "mean_width": 3078.018625,
+            "n_points": 8016,
+            "wis": 575.339999
+          },
+          "coverage_error": 0.012625
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/lead/g0.2/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.819411,
+        "interval_score": 6026.623855,
+        "mean_width": 4481.577904,
+        "n_points": 56083,
+        "wis": 812.487381
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -4.8974,
+      "macro_interval_score_improvement_pct": -4.8974,
+      "macro_relative_interval_score": 1.048974,
+      "max_per_ba_coverage_error": 0.030589,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.822663,
+            "interval_score": 3012.160446,
+            "mean_width": 2237.204304,
+            "n_points": 8013,
+            "wis": 403.388372
+          },
+          "coverage_error": 0.022663
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.819361,
+            "interval_score": 8323.21068,
+            "mean_width": 6090.278515,
+            "n_points": 8016,
+            "wis": 1108.798444
+          },
+          "coverage_error": 0.019361
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.830589,
+            "interval_score": 2920.184856,
+            "mean_width": 2219.647906,
+            "n_points": 8016,
+            "wis": 401.339095
+          },
+          "coverage_error": 0.030589
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.813303,
+            "interval_score": 7631.788795,
+            "mean_width": 5746.778383,
+            "n_points": 8013,
+            "wis": 1047.717741
+          },
+          "coverage_error": 0.013303
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.817116,
+            "interval_score": 2779.321633,
+            "mean_width": 2051.942546,
+            "n_points": 8016,
+            "wis": 377.788117
+          },
+          "coverage_error": 0.017116
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.819342,
+            "interval_score": 13227.787664,
+            "mean_width": 9867.892598,
+            "n_points": 7993,
+            "wis": 1768.71173
+          },
+          "coverage_error": 0.019342
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.813498,
+            "interval_score": 4312.0475,
+            "mean_width": 3172.389361,
+            "n_points": 8016,
+            "wis": 582.346751
+          },
+          "coverage_error": 0.013498
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/lead/g0.2/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.8218,
+        "interval_score": 6036.502626,
+        "mean_width": 4510.5809,
+        "n_points": 56083,
+        "wis": 813.145965
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -4.9181,
+      "macro_interval_score_improvement_pct": -4.9181,
+      "macro_relative_interval_score": 1.049181,
+      "max_per_ba_coverage_error": 0.032086,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.824286,
+            "interval_score": 3009.331939,
+            "mean_width": 2226.380233,
+            "n_points": 8013,
+            "wis": 403.199805
+          },
+          "coverage_error": 0.024286
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.820235,
+            "interval_score": 8249.116797,
+            "mean_width": 6056.683685,
+            "n_points": 8016,
+            "wis": 1103.858852
+          },
+          "coverage_error": 0.020235
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.832086,
+            "interval_score": 2926.546206,
+            "mean_width": 2226.913524,
+            "n_points": 8016,
+            "wis": 401.763185
+          },
+          "coverage_error": 0.032086
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.817297,
+            "interval_score": 7680.951699,
+            "mean_width": 5842.233535,
+            "n_points": 8013,
+            "wis": 1050.995268
+          },
+          "coverage_error": 0.017297
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.819611,
+            "interval_score": 2787.964069,
+            "mean_width": 2072.92143,
+            "n_points": 8016,
+            "wis": 378.36428
+          },
+          "coverage_error": 0.019611
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.821594,
+            "interval_score": 13350.074128,
+            "mean_width": 10015.963742,
+            "n_points": 7993,
+            "wis": 1776.864161
+          },
+          "coverage_error": 0.021594
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.81749,
+            "interval_score": 4272.000608,
+            "mean_width": 3148.410043,
+            "n_points": 8016,
+            "wis": 579.676959
+          },
+          "coverage_error": 0.01749
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/series/g0.02/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.79796,
+        "interval_score": 5743.951486,
+        "mean_width": 3986.514549,
+        "n_points": 56083,
+        "wis": 793.642556
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": 0.3301,
+      "macro_interval_score_improvement_pct": 0.3301,
+      "macro_relative_interval_score": 0.996699,
+      "max_per_ba_coverage_error": 0.011032,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.799825,
+            "interval_score": 2862.176893,
+            "mean_width": 1992.758257,
+            "n_points": 8013,
+            "wis": 393.389468
+          },
+          "coverage_error": 0.000175
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.800524,
+            "interval_score": 7798.884878,
+            "mean_width": 5266.54161,
+            "n_points": 8016,
+            "wis": 1073.843391
+          },
+          "coverage_error": 0.000524
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.804516,
+            "interval_score": 2753.639019,
+            "mean_width": 1917.948379,
+            "n_points": 8016,
+            "wis": 390.23604
+          },
+          "coverage_error": 0.004516
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.788968,
+            "interval_score": 7356.214994,
+            "mean_width": 5122.552938,
+            "n_points": 8013,
+            "wis": 1029.346155
+          },
+          "coverage_error": 0.011032
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.79753,
+            "interval_score": 2642.753654,
+            "mean_width": 1876.639203,
+            "n_points": 8016,
+            "wis": 368.683585
+          },
+          "coverage_error": 0.00247
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.801952,
+            "interval_score": 12746.339965,
+            "mean_width": 8946.367806,
+            "n_points": 7993,
+            "wis": 1736.615217
+          },
+          "coverage_error": 0.001952
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.792415,
+            "interval_score": 4067.267565,
+            "mean_width": 2796.703766,
+            "n_points": 8016,
+            "wis": 566.028089
+          },
+          "coverage_error": 0.007585
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/series/g0.02/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.802275,
+        "interval_score": 5737.847467,
+        "mean_width": 4037.825219,
+        "n_points": 56083,
+        "wis": 793.235622
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": 0.3827,
+      "macro_interval_score_improvement_pct": 0.3827,
+      "macro_relative_interval_score": 0.996173,
+      "max_per_ba_coverage_error": 0.006262,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.803569,
+            "interval_score": 2868.02416,
+            "mean_width": 1985.028765,
+            "n_points": 8013,
+            "wis": 393.779286
+          },
+          "coverage_error": 0.003569
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.805888,
+            "interval_score": 7760.631409,
+            "mean_width": 5346.615957,
+            "n_points": 8016,
+            "wis": 1071.29316
+          },
+          "coverage_error": 0.005888
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.806262,
+            "interval_score": 2767.111213,
+            "mean_width": 1930.516204,
+            "n_points": 8016,
+            "wis": 391.134186
+          },
+          "coverage_error": 0.006262
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.797329,
+            "interval_score": 7339.276264,
+            "mean_width": 5219.57979,
+            "n_points": 8013,
+            "wis": 1028.216906
+          },
+          "coverage_error": 0.002671
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.800524,
+            "interval_score": 2634.832385,
+            "mean_width": 1869.896234,
+            "n_points": 8016,
+            "wis": 368.155501
+          },
+          "coverage_error": 0.000524
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.804954,
+            "interval_score": 12749.940845,
+            "mean_width": 9069.874449,
+            "n_points": 7993,
+            "wis": 1736.855276
+          },
+          "coverage_error": 0.004954
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.797405,
+            "interval_score": 4064.760824,
+            "mean_width": 2857.377408,
+            "n_points": 8016,
+            "wis": 565.860973
+          },
+          "coverage_error": 0.002595
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/series/g0.05/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.796783,
+        "interval_score": 5743.672837,
+        "mean_width": 3987.461446,
+        "n_points": 56083,
+        "wis": 793.62398
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": 0.2746,
+      "macro_interval_score_improvement_pct": 0.2746,
+      "macro_relative_interval_score": 0.997254,
+      "max_per_ba_coverage_error": 0.008037,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.799077,
+            "interval_score": 2854.314772,
+            "mean_width": 1959.212231,
+            "n_points": 8013,
+            "wis": 392.865327
+          },
+          "coverage_error": 0.000923
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.797156,
+            "interval_score": 7768.092036,
+            "mean_width": 5243.109709,
+            "n_points": 8016,
+            "wis": 1071.790535
+          },
+          "coverage_error": 0.002844
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.799276,
+            "interval_score": 2765.880757,
+            "mean_width": 1881.330086,
+            "n_points": 8016,
+            "wis": 391.052156
+          },
+          "coverage_error": 0.000724
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.791963,
+            "interval_score": 7321.525106,
+            "mean_width": 5204.122432,
+            "n_points": 8013,
+            "wis": 1027.033495
+          },
+          "coverage_error": 0.008037
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.796407,
+            "interval_score": 2662.599744,
+            "mean_width": 1876.850602,
+            "n_points": 8016,
+            "wis": 370.006658
+          },
+          "coverage_error": 0.003593
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.800951,
+            "interval_score": 12783.888178,
+            "mean_width": 8951.564566,
+            "n_points": 7993,
+            "wis": 1739.118431
+          },
+          "coverage_error": 0.000951
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.792665,
+            "interval_score": 4069.118652,
+            "mean_width": 2809.980071,
+            "n_points": 8016,
+            "wis": 566.151495
+          },
+          "coverage_error": 0.007335
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/series/g0.05/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.799173,
+        "interval_score": 5752.774592,
+        "mean_width": 4025.394198,
+        "n_points": 56083,
+        "wis": 794.230763
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": 0.1509,
+      "macro_interval_score_improvement_pct": 0.1509,
+      "macro_relative_interval_score": 0.998491,
+      "max_per_ba_coverage_error": 0.004543,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.800824,
+            "interval_score": 2863.567558,
+            "mean_width": 1958.840397,
+            "n_points": 8013,
+            "wis": 393.482179
+          },
+          "coverage_error": 0.000824
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.801272,
+            "interval_score": 7767.060485,
+            "mean_width": 5293.900925,
+            "n_points": 8016,
+            "wis": 1071.721765
+          },
+          "coverage_error": 0.001272
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.800524,
+            "interval_score": 2776.989911,
+            "mean_width": 1886.853798,
+            "n_points": 8016,
+            "wis": 391.792766
+          },
+          "coverage_error": 0.000524
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.795457,
+            "interval_score": 7337.585318,
+            "mean_width": 5233.452448,
+            "n_points": 8013,
+            "wis": 1028.104176
+          },
+          "coverage_error": 0.004543
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.79753,
+            "interval_score": 2652.945889,
+            "mean_width": 1860.376692,
+            "n_points": 8016,
+            "wis": 369.363068
+          },
+          "coverage_error": 0.00247
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.802702,
+            "interval_score": 12821.423431,
+            "mean_width": 9113.999228,
+            "n_points": 7993,
+            "wis": 1741.620781
+          },
+          "coverage_error": 0.002702
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.795908,
+            "interval_score": 4069.643185,
+            "mean_width": 2844.615142,
+            "n_points": 8016,
+            "wis": 566.186464
+          },
+          "coverage_error": 0.004092
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/series/g0.1/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.799529,
+        "interval_score": 5790.699235,
+        "mean_width": 4063.911799,
+        "n_points": 56083,
+        "wis": 796.759073
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": -0.6116,
+      "macro_interval_score_improvement_pct": -0.6116,
+      "macro_relative_interval_score": 1.006116,
+      "max_per_ba_coverage_error": 0.00509,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.804193,
+            "interval_score": 2893.924407,
+            "mean_width": 2013.373602,
+            "n_points": 8013,
+            "wis": 395.505969
+          },
+          "coverage_error": 0.004193
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.803019,
+            "interval_score": 7810.921645,
+            "mean_width": 5376.647835,
+            "n_points": 8016,
+            "wis": 1074.645842
+          },
+          "coverage_error": 0.003019
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.800025,
+            "interval_score": 2788.949586,
+            "mean_width": 1899.663672,
+            "n_points": 8016,
+            "wis": 392.590078
+          },
+          "coverage_error": 2.5e-05
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.796705,
+            "interval_score": 7399.068376,
+            "mean_width": 5380.658568,
+            "n_points": 8013,
+            "wis": 1032.203047
+          },
+          "coverage_error": 0.003295
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.796781,
+            "interval_score": 2688.590541,
+            "mean_width": 1892.308378,
+            "n_points": 8016,
+            "wis": 371.739378
+          },
+          "coverage_error": 0.003219
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.801076,
+            "interval_score": 12875.919237,
+            "mean_width": 9038.29968,
+            "n_points": 7993,
+            "wis": 1745.253835
+          },
+          "coverage_error": 0.001076
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.79491,
+            "interval_score": 4097.368015,
+            "mean_width": 2860.429054,
+            "n_points": 8016,
+            "wis": 568.034786
+          },
+          "coverage_error": 0.00509
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/series/g0.1/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.801009,
+        "interval_score": 5806.024607,
+        "mean_width": 4089.931283,
+        "n_points": 56083,
+        "wis": 797.780764
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": -0.7305,
+      "macro_interval_score_improvement_pct": -0.7305,
+      "macro_relative_interval_score": 1.007305,
+      "max_per_ba_coverage_error": 0.005316,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.805316,
+            "interval_score": 2893.401514,
+            "mean_width": 2013.748694,
+            "n_points": 8013,
+            "wis": 395.47111
+          },
+          "coverage_error": 0.005316
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.803643,
+            "interval_score": 7827.770779,
+            "mean_width": 5390.36358,
+            "n_points": 8016,
+            "wis": 1075.769118
+          },
+          "coverage_error": 0.003643
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.801148,
+            "interval_score": 2793.59764,
+            "mean_width": 1903.698666,
+            "n_points": 8016,
+            "wis": 392.899948
+          },
+          "coverage_error": 0.001148
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.800948,
+            "interval_score": 7411.661363,
+            "mean_width": 5364.649806,
+            "n_points": 8013,
+            "wis": 1033.042579
+          },
+          "coverage_error": 0.000948
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.797655,
+            "interval_score": 2681.882094,
+            "mean_width": 1886.842372,
+            "n_points": 8016,
+            "wis": 371.292148
+          },
+          "coverage_error": 0.002345
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.802077,
+            "interval_score": 12961.437344,
+            "mean_width": 9218.394736,
+            "n_points": 7993,
+            "wis": 1750.955042
+          },
+          "coverage_error": 0.002077
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.796282,
+            "interval_score": 4092.463124,
+            "mean_width": 2866.236082,
+            "n_points": 8016,
+            "wis": 567.707793
+          },
+          "coverage_error": 0.003718
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "adaptive/series/g0.2/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.803844,
+        "interval_score": 5887.889084,
+        "mean_width": 4217.245963,
+        "n_points": 56083,
+        "wis": 803.238396
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": -2.0621,
+      "macro_interval_score_improvement_pct": -2.0621,
+      "macro_relative_interval_score": 1.020621,
+      "max_per_ba_coverage_error": 0.011751,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.806564,
+            "interval_score": 2885.610005,
+            "mean_width": 2062.036547,
+            "n_points": 8013,
+            "wis": 394.951676
+          },
+          "coverage_error": 0.006564
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.811751,
+            "interval_score": 8102.153238,
+            "mean_width": 5768.349061,
+            "n_points": 8016,
+            "wis": 1094.061282
+          },
+          "coverage_error": 0.011751
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.806138,
+            "interval_score": 2826.901089,
+            "mean_width": 1961.193586,
+            "n_points": 8016,
+            "wis": 395.120178
+          },
+          "coverage_error": 0.006138
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.802446,
+            "interval_score": 7497.436841,
+            "mean_width": 5463.075033,
+            "n_points": 8013,
+            "wis": 1038.760944
+          },
+          "coverage_error": 0.002446
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.799526,
+            "interval_score": 2713.830057,
+            "mean_width": 1939.574113,
+            "n_points": 8016,
+            "wis": 373.422012
+          },
+          "coverage_error": 0.000474
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.804579,
+            "interval_score": 13039.282334,
+            "mean_width": 9366.694795,
+            "n_points": 7993,
+            "wis": 1756.144708
+          },
+          "coverage_error": 0.004579
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.795908,
+            "interval_score": 4170.008008,
+            "mean_width": 2974.233385,
+            "n_points": 8016,
+            "wis": 572.877452
+          },
+          "coverage_error": 0.004092
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "adaptive/series/g0.2/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.805092,
+        "interval_score": 5876.67879,
+        "mean_width": 4228.137767,
+        "n_points": 56083,
+        "wis": 802.491043
+      },
+      "coverage_constraint_satisfied": true,
+      "interval_score_improvement_pct": -1.7581,
+      "macro_interval_score_improvement_pct": -1.7581,
+      "macro_relative_interval_score": 1.017581,
+      "max_per_ba_coverage_error": 0.010878,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.807812,
+            "interval_score": 2866.524157,
+            "mean_width": 2040.282163,
+            "n_points": 8013,
+            "wis": 393.679286
+          },
+          "coverage_error": 0.007812
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.810878,
+            "interval_score": 7984.78364,
+            "mean_width": 5663.806271,
+            "n_points": 8016,
+            "wis": 1086.236642
+          },
+          "coverage_error": 0.010878
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.807011,
+            "interval_score": 2834.341636,
+            "mean_width": 1973.398405,
+            "n_points": 8016,
+            "wis": 395.616214
+          },
+          "coverage_error": 0.007011
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.804318,
+            "interval_score": 7561.16425,
+            "mean_width": 5567.587005,
+            "n_points": 8013,
+            "wis": 1043.009438
+          },
+          "coverage_error": 0.004318
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.800399,
+            "interval_score": 2691.346655,
+            "mean_width": 1927.412083,
+            "n_points": 8016,
+            "wis": 371.923119
+          },
+          "coverage_error": 0.000399
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.806331,
+            "interval_score": 13066.914848,
+            "mean_width": 9476.88843,
+            "n_points": 7993,
+            "wis": 1757.986876
+          },
+          "coverage_error": 0.006331
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.798902,
+            "interval_score": 4151.810877,
+            "mean_width": 2962.332535,
+            "n_points": 8016,
+            "wis": 571.66431
+          },
+          "coverage_error": 0.001098
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    },
+    "reference-fixed/w168": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.818626,
+        "interval_score": 5765.521581,
+        "mean_width": 4184.179316,
+        "n_points": 56083,
+        "wis": 795.080562
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": -0.004,
+      "macro_interval_score_improvement_pct": -0.004,
+      "macro_relative_interval_score": 1.00004,
+      "max_per_ba_coverage_error": 0.037575,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.814177,
+            "interval_score": 2895.82186,
+            "mean_width": 2108.545492,
+            "n_points": 8013,
+            "wis": 395.632466
+          },
+          "coverage_error": 0.014177
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.837575,
+            "interval_score": 7866.379702,
+            "mean_width": 5680.703308,
+            "n_points": 8016,
+            "wis": 1078.343046
+          },
+          "coverage_error": 0.037575
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.837076,
+            "interval_score": 2752.796695,
+            "mean_width": 2145.361177,
+            "n_points": 8016,
+            "wis": 390.179885
+          },
+          "coverage_error": 0.037076
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.808436,
+            "interval_score": 7395.575686,
+            "mean_width": 5366.391573,
+            "n_points": 8013,
+            "wis": 1031.970201
+          },
+          "coverage_error": 0.008436
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.812001,
+            "interval_score": 2631.957941,
+            "mean_width": 1946.688481,
+            "n_points": 8016,
+            "wis": 367.963871
+          },
+          "coverage_error": 0.012001
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.813837,
+            "interval_score": 12766.725448,
+            "mean_width": 9152.491593,
+            "n_points": 7993,
+            "wis": 1737.974249
+          },
+          "coverage_error": 0.013837
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.80726,
+            "interval_score": 4069.018081,
+            "mean_width": 2902.994613,
+            "n_points": 8016,
+            "wis": 566.14479
+          },
+          "coverage_error": 0.00726
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 168,
+      "window_origins": 168
+    },
+    "reference-fixed/w56": {
+      "baseline": {
+        "coverage": 0.763369,
+        "interval_score": 5753.221257,
+        "mean_width": 3673.585719,
+        "n_points": 56083,
+        "wis": 794.260541
+      },
+      "calibrated": {
+        "coverage": 0.82385,
+        "interval_score": 5757.876488,
+        "mean_width": 4252.226694,
+        "n_points": 56083,
+        "wis": 794.57089
+      },
+      "coverage_constraint_satisfied": false,
+      "interval_score_improvement_pct": 0.0928,
+      "macro_interval_score_improvement_pct": 0.0928,
+      "macro_relative_interval_score": 0.999072,
+      "max_per_ba_coverage_error": 0.035828,
+      "per_ba": {
+        "CISO": {
+          "baseline": {
+            "coverage": 0.773493,
+            "interval_score": 2861.705407,
+            "mean_width": 1830.859339,
+            "n_points": 8013,
+            "wis": 393.358036
+          },
+          "calibrated": {
+            "coverage": 0.820042,
+            "interval_score": 2887.020614,
+            "mean_width": 2092.609369,
+            "n_points": 8013,
+            "wis": 395.045716
+          },
+          "coverage_error": 0.020042
+        },
+        "ERCO": {
+          "baseline": {
+            "coverage": 0.755863,
+            "interval_score": 7789.076128,
+            "mean_width": 4768.678179,
+            "n_points": 8016,
+            "wis": 1073.189474
+          },
+          "calibrated": {
+            "coverage": 0.835205,
+            "interval_score": 7797.424314,
+            "mean_width": 5708.535849,
+            "n_points": 8016,
+            "wis": 1073.74602
+          },
+          "coverage_error": 0.035205
+        },
+        "ISNE": {
+          "baseline": {
+            "coverage": 0.775075,
+            "interval_score": 2805.600221,
+            "mean_width": 1774.891522,
+            "n_points": 8016,
+            "wis": 393.70012
+          },
+          "calibrated": {
+            "coverage": 0.835828,
+            "interval_score": 2759.277303,
+            "mean_width": 2147.146996,
+            "n_points": 8016,
+            "wis": 390.611925
+          },
+          "coverage_error": 0.035828
+        },
+        "MISO": {
+          "baseline": {
+            "coverage": 0.759266,
+            "interval_score": 7405.149484,
+            "mean_width": 4812.791222,
+            "n_points": 8013,
+            "wis": 1032.608454
+          },
+          "calibrated": {
+            "coverage": 0.81867,
+            "interval_score": 7368.90093,
+            "mean_width": 5477.166042,
+            "n_points": 8013,
+            "wis": 1030.191884
+          },
+          "coverage_error": 0.01867
+        },
+        "NYIS": {
+          "baseline": {
+            "coverage": 0.762101,
+            "interval_score": 2646.083907,
+            "mean_width": 1671.581986,
+            "n_points": 8016,
+            "wis": 368.905602
+          },
+          "calibrated": {
+            "coverage": 0.82011,
+            "interval_score": 2637.096823,
+            "mean_width": 1974.48631,
+            "n_points": 8016,
+            "wis": 368.306463
+          },
+          "coverage_error": 0.02011
+        },
+        "PJM": {
+          "baseline": {
+            "coverage": 0.75979,
+            "interval_score": 12714.547592,
+            "mean_width": 8277.523253,
+            "n_points": 7993,
+            "wis": 1734.495725
+          },
+          "calibrated": {
+            "coverage": 0.822094,
+            "interval_score": 12797.729877,
+            "mean_width": 9397.581817,
+            "n_points": 7993,
+            "wis": 1740.041211
+          },
+          "coverage_error": 0.022094
+        },
+        "SWPP": {
+          "baseline": {
+            "coverage": 0.757984,
+            "interval_score": 4069.896009,
+            "mean_width": 2591.721136,
+            "n_points": 8016,
+            "wis": 566.203319
+          },
+          "calibrated": {
+            "coverage": 0.814995,
+            "interval_score": 4077.413242,
+            "mean_width": 2982.474041,
+            "n_points": 8016,
+            "wis": 566.704468
+          },
+          "coverage_error": 0.014995
+        }
+      },
+      "pool": "per-rto",
+      "window_mature_origins": 56,
+      "window_origins": 56
+    }
+  },
+  "runtime": {
+    "cuda_device": "NVIDIA A40",
+    "device_map": "cuda",
+    "dtype": "float32",
+    "load_seconds": 20.279,
+    "predict_seconds": 56.051
+  },
+  "schema_version": 2,
+  "selection_performed": false,
+  "target_coverage": 0.8,
+  "versions": {
+    "numpy": "2.1.2",
+    "torch": "2.8.0+cu128"
+  }
+}

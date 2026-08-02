@@ -2,7 +2,7 @@
 // Monitor dashboard API (type=DF, "Day-ahead demand forecast"). These
 // are the forecasts the BA operators themselves submit to EIA every
 // morning. Used as a reference line on surge's forecast chart so a
-// reader can compare surge-fm-v3 against operator consensus.
+// reader can compare the configured Surge forecast against operator consensus.
 //
 // Not all 53 BAs publish DF — smaller non-RTO utilities often don't.
 // The endpoint returns an empty `points` array when a BA is absent; the

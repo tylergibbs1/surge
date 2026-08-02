@@ -1,11 +1,8 @@
-"""Minimal CLI surface. Optional; install with `pip install surge[cli]`."""
+"""Minimal command-line interface for the core ``surge-grid`` package."""
 
 from __future__ import annotations
 
-try:
-    import typer
-except ImportError as e:  # pragma: no cover
-    raise SystemExit("CLI extras not installed. Run `pip install surge[cli]`.") from e
+import typer
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 

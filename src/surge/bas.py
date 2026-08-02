@@ -180,3 +180,36 @@ def filter_codes(
             continue
         out.append(c)
     return out
+
+
+# IANA zones for the seven organized markets. Local wall-clock time is what
+# drives human load behaviour: weekends, holidays and the evening peak are
+# local-calendar events, and a UTC-based flag misaligns them by the offset.
+# Measured on 2024, a UTC weekend flag is wrong for 772 CISO hours, 525 of them
+# inside the 17:00-21:00 local peak.
+#
+# Deliberately only the RTOs. The remaining BAs are not guessed: a wrong zone
+# would be worse than an absent one, and the local-calendar feature contract
+# refuses to build without a known zone.
+_TIMEZONES: dict[str, str] = {
+    "PJM": "America/New_York",
+    "CISO": "America/Los_Angeles",
+    "ERCO": "America/Chicago",
+    "MISO": "America/Chicago",
+    "NYIS": "America/New_York",
+    "ISNE": "America/New_York",
+    "SWPP": "America/Chicago",
+}
+
+
+def timezone(code: str) -> str | None:
+    """IANA zone for a BA's local calendar, or None when it is not established.
+
+    ``BA.utc_offset`` is standard-time only and is documented as display-only;
+    it cannot express daylight saving and must not be used for features.
+    """
+    return _TIMEZONES.get(code.upper())
+
+
+def timezones() -> dict[str, str]:
+    return dict(_TIMEZONES)

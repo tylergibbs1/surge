@@ -1,10 +1,13 @@
 name: bake
+
 on:
   schedule:
-    # 06:15 UTC — a bit after EIA-930 publishes its overnight batch so the
-    # bake picks up fresh demand history on the first try of the day.
     - cron: "15 6 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: production-bake
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -12,25 +15,95 @@ permissions:
 jobs:
   bake:
     runs-on: ubuntu-latest
-    # The endpoint itself can take up to 5 min (53 BAs × Modal inference,
-    # including cold starts). Give the curl room to wait.
     timeout-minutes: 10
     steps:
-      - name: Trigger bake endpoint
+      - name: Trigger and verify complete bake
         env:
           BAKE_URL: ${{ secrets.BAKE_URL }}
           BAKE_SECRET: ${{ secrets.BAKE_SECRET }}
         run: |
           if [ -z "$BAKE_URL" ] || [ -z "$BAKE_SECRET" ]; then
-            echo "::error::BAKE_URL and BAKE_SECRET must be set as repo secrets."
+            echo "::error::BAKE_URL and BAKE_SECRET must be configured."
             exit 1
           fi
-          # --max-time matches the Next.js maxDuration (300s) plus a small
-          # network cushion. -fS turns non-2xx into a curl failure so the
-          # job exits non-zero on partial bakes (207) or errors.
-          curl -fS --max-time 320 \
-            -X POST "$BAKE_URL" \
-            -H "Authorization: Bearer $BAKE_SECRET" \
-            -H "Accept: application/json" \
-            -o /tmp/bake_result.json
-          jq '.ok, .fail, .elapsed_ms' < /tmp/bake_result.json
+          case "$BAKE_URL" in
+            */api/bake) ;;
+            *)
+              echo "::error::BAKE_URL must end exactly in /api/bake."
+              exit 1
+              ;;
+          esac
+
+          http_status="$(curl --silent --show-error --max-time 320 \
+            --retry 2 --retry-all-errors \
+            --request POST "$BAKE_URL" \
+            --header "Authorization: Bearer $BAKE_SECRET" \
+            --header "Accept: application/json" \
+            --output /tmp/bake-result.json \
+            --write-out '%{http_code}')"
+
+          if [ "$http_status" != "200" ]; then
+            echo "::error::Bake returned HTTP $http_status; only a complete HTTP 200 is publishable."
+            jq . /tmp/bake-result.json || true
+            exit 1
+          fi
+
+          jq -e '
+            (if (.forecast_ok | type) == "number" then .forecast_ok
+             elif (.ok | type) == "number" then .ok
+             else 0 end) as $success |
+            (if (.forecast_fail | type) == "number" then .forecast_fail
+             elif (.fail | type) == "number" then .fail
+             else 0 end) as $failures |
+            ($success == 7) and
+            ($failures == 0) and
+            (.expected == 7) and
+            (.published == true) and
+            (.run_id | type == "string" and length > 0)
+          ' /tmp/bake-result.json > /dev/null || {
+            echo "::error::Bake JSON did not prove a complete, published seven-RTO run."
+            jq . /tmp/bake-result.json || true
+            exit 1
+          }
+
+          jq '{forecast_ok: (.forecast_ok // .ok), forecast_fail: (.forecast_fail // .fail), published, run_id, elapsed_ms}' /tmp/bake-result.json
+          expected_run_id="$(jq -r '.run_id' /tmp/bake-result.json)"
+
+          app_root="${BAKE_URL%/api/bake}"
+          if [ -z "$app_root" ] || [ "$app_root/api/bake" != "$BAKE_URL" ]; then
+            echo "::error::Could not derive an application origin from BAKE_URL."
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            "$app_root/api/forecast-all?run_id=$expected_run_id" \
+            --header "Cache-Control: no-cache" \
+            --output /tmp/forecast-all.json
+          jq -e --arg expected_run_id "$expected_run_id" '
+            .schema_version == "2.0" and
+            (.run_id == $expected_run_id) and
+            (.forecasts | length == 7) and
+            ([.forecasts[].ba] | sort == (["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"] | sort)) and
+            (all(.forecasts[]; .run_id == $expected_run_id)) and
+            ([.forecasts[].model_revision] | unique | length == 1) and
+            ([.forecasts[].code_revision] | unique | length == 1) and
+            ([.forecasts[].feature_spec_version] | unique | length == 1) and
+            ([.forecasts[].feature_spec_sha256] | unique | length == 1) and
+            ([.forecasts[].availability_mode] | unique == ["exact_vintage"])
+          ' /tmp/forecast-all.json > /dev/null || {
+            echo "::error::Read-side bulk canary did not expose the complete published run."
+            exit 1
+          }
+
+          curl --fail --silent --show-error \
+            "$app_root/api/forecast?ba=PJM&horizon=24&run_id=$expected_run_id" \
+            --header "Cache-Control: no-cache" \
+            --output /tmp/pjm.json
+          jq -e --arg expected_run_id "$expected_run_id" '
+            .ba == "PJM" and
+            (.run_id == $expected_run_id) and
+            (.issuance_id | type == "string" and length > 0) and
+            (.points | length == 24)
+          ' /tmp/pjm.json > /dev/null || {
+            echo "::error::PJM read-side canary failed."
+            exit 1
+          }

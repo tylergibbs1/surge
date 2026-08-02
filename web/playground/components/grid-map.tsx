@@ -188,7 +188,6 @@ function GridPolygons({
     return () => { cancelled = true }
     // `selected` is intentionally excluded — the third effect below
     // handles outline-width updates without needing to re-fetch geojson.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, isLoaded])
 
   // Paint % of peak when forecasts update. Gated on `features` so the
