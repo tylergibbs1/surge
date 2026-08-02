@@ -182,3 +182,54 @@ def test_mismatched_shapes_are_rejected() -> None:
             window=5,
             min_history=2,
         )
+
+
+def _cohort_data(year: int, hours: int = 24 * 400) -> object:
+    """Minimal BAData-like stub for cohort origin selection."""
+    from experiments.features import BAData
+
+    start = np.datetime64(f"{year - 1}-06-01T00:00:00")
+    ts = start + np.arange(hours) * np.timedelta64(1, "h")
+    return BAData(
+        ba="PJM",
+        ts_utc=ts,
+        target=np.ones(hours, dtype=np.float32),
+        covariates={},
+        future_keys=[],
+        train_end=hours,
+        val_end=hours,
+        denom_mae=1.0,
+        feature_spec=None,  # type: ignore[arg-type]
+        availability_mode=None,  # type: ignore[arg-type]
+    )
+
+
+def test_cohort_origins_stay_inside_the_requested_year() -> None:
+    from experiments.run_aci_replication_c2 import cohort_origins
+
+    data = _cohort_data(2023)
+    origins = cohort_origins(data, year=2023, context=48, horizon=24)
+    assert origins
+    times = data.ts_utc[np.asarray(origins)]
+    years = times.astype("datetime64[Y]").astype(np.int64) + 1970
+    assert set(years.tolist()) == {2023}
+    # Every target hour must also stay inside the cohort.
+    last_target = data.ts_utc[origins[-1] + 24 - 1]
+    assert (last_target.astype("datetime64[Y]").astype(np.int64) + 1970) == 2023
+
+
+def test_cohort_origins_require_a_full_context_window() -> None:
+    from experiments.run_aci_replication_c2 import cohort_origins
+
+    data = _cohort_data(2023)
+    origins = cohort_origins(data, year=2023, context=48, horizon=24)
+    assert min(origins) >= 48
+
+
+def test_replication_refuses_the_locked_lane() -> None:
+    from experiments.run_aci_replication_c2 import validate_cohort_year
+
+    for year in (2025, 2026, 2018):
+        with pytest.raises(ValueError, match="locked test lane|cohort year must be"):
+            validate_cohort_year(year)
+    assert validate_cohort_year(2023) == 2023
