@@ -153,15 +153,32 @@ def _replay_alpha(history: list[MaturedOrigin]) -> float:
     return alpha
 
 
+def _scores_by_target_hour(window: list[MaturedOrigin]) -> dict[int, list[float]]:
+    """Conformity scores gathered by the UTC hour each one describes."""
+    grouped: dict[int, list[float]] = {}
+    for origin in window:
+        scores = cqr_scores(origin.lower, origin.upper, origin.actual)
+        for lead, score in enumerate(scores):
+            if not np.isfinite(score):
+                continue
+            hour = (origin.origin_utc + timedelta(hours=lead)).hour
+            grouped.setdefault(hour, []).append(float(score))
+    return grouped
+
+
 def calibrate(
     lower: np.ndarray,
     upper: np.ndarray,
     *,
     history: list[MaturedOrigin],
+    issued_at_utc: datetime | None = None,
 ) -> tuple[np.ndarray, np.ndarray, CalibrationState]:
     """Adjust one issuance's interval from its own matured history.
 
     ``history`` must already be filtered to matured origins, oldest first.
+    ``issued_at_utc`` lets the calibrator group past errors by the hour of day
+    they describe. Without it, grouping falls back to lead index, which is only
+    the same thing while every issuance happens at a fixed hour.
     """
     low = np.asarray(lower, dtype=np.float64)
     high = np.asarray(upper, dtype=np.float64)
@@ -193,18 +210,15 @@ def calibrate(
     adjusted_high = high.copy()
     adjustments: list[float] = []
     width = np.maximum(high - low, NORMALIZATION_EPSILON)
+    # Group past scores by the target's hour of day, not by lead index. Load
+    # error is strongly diurnal -- midday can run four times the overnight rate
+    # in a solar-heavy BA -- so a score window that mixes hours calibrates none
+    # of them. Lead index only equals hour of day while every issuance happens
+    # at the same hour, which production does not guarantee.
+    by_hour = _scores_by_target_hour(window)
     for lead in range(horizon):
-        scores = np.concatenate(
-            [
-                cqr_scores(
-                    origin.lower[lead : lead + 1],
-                    origin.upper[lead : lead + 1],
-                    origin.actual[lead : lead + 1],
-                )
-                for origin in window
-                if lead < origin.actual.shape[0]
-            ]
-        )
+        target_hour = (issued_at_utc + timedelta(hours=lead)).hour if issued_at_utc else lead
+        scores = np.asarray(by_hour.get(target_hour % 24, []), dtype=np.float64)
         scores = scores[np.isfinite(scores)]
         if not len(scores):
             adjustments.append(0.0)

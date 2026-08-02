@@ -209,6 +209,7 @@ def forecast_ba(
             horizon=horizon,
             outcome_delay_hours=MATURITY_HOURS,
         ),
+        issued_at_utc=numpy_to_datetime(bundle.served_ts_utc[0]),
     )
 
     points: list[dict[str, Any]] = []

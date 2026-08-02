@@ -152,3 +152,45 @@ def test_history_loader_joins_through_issuances_for_the_ba() -> None:
     # The BA filter must be applied to issuances, never to forecast_points.
     points_call = source.split('store.scan("forecast_points")')[1].split(".collect()")[0]
     assert '"ba"' not in points_call
+
+
+def test_scores_are_grouped_by_hour_of_day_not_lead_index() -> None:
+    """Load error is diurnal, so a window that mixes hours calibrates none.
+
+    Two issuances made at different hours must agree about the hour they share,
+    which is false if grouping is by lead index.
+    """
+    from datetime import timedelta
+
+    generator = np.random.default_rng(3)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    history = []
+    for index in range(60):
+        origin = start + timedelta(hours=24 * index)
+        centre = np.full(HORIZON, 1000.0)
+        actual = centre.copy()
+        # Only the target hour 03:00 UTC is volatile; the rest are placid.
+        for lead in range(HORIZON):
+            hour = (origin + timedelta(hours=lead)).hour
+            noise = 60.0 if hour == 3 else 1.0
+            actual[lead] = 1000.0 + generator.normal(0.0, noise)
+        history.append(
+            MaturedOrigin(origin_utc=origin, lower=centre - 5, upper=centre + 5,
+                          actual=actual)
+        )
+
+    midnight = datetime(2026, 4, 1, 0, tzinfo=UTC)
+    shifted = datetime(2026, 4, 1, 1, tzinfo=UTC)
+    low = np.full(HORIZON, 995.0)
+    high = np.full(HORIZON, 1005.0)
+    from_midnight, _, _ = calibrate(low, high, history=history, issued_at_utc=midnight)
+    from_shifted, _, _ = calibrate(low, high, history=history, issued_at_utc=shifted)
+
+    # 03:00 UTC is lead 3 from midnight and lead 2 from 01:00. Both issuances
+    # must widen that hour by the same amount.
+    assert np.isclose(
+        (995.0 - from_midnight[3]), (995.0 - from_shifted[2]), rtol=1e-9
+    )
+    # And it must be the widest hour in both.
+    assert int(np.argmin(from_midnight)) == 3
+    assert int(np.argmin(from_shifted)) == 2
