@@ -37,31 +37,67 @@ falls from 1715 to 1547 MW. See `docs/operator-baseline.md`.
 
 ## The honest comparison
 
-2024 validation lane, seven RTOs, identical target hours, calendar-only future
-covariates, operator hour-corrected. MAPE:
+The operator column this project used was itself unreliable. EIA-930's `DF` is
+not the forecast an operator runs on: the form instructions excuse respondents
+from making `DF` consistent with the `D` beside it, and EIA warns the comparison
+"is not very meaningful" for some BAs.
 
-| BA | Surge (zero-shot) | Operator | Winner |
+Checked against what the operators publish themselves, `DF` is faithful for
+ERCOT and materially wrong for PJM and CAISO, always in the direction that
+flatters Surge:
+
+| RTO | `DF`-derived | Operator, published | Verdict |
 |---|---:|---:|---|
-| MISO | **2.18** | 2.78 | Surge |
-| CISO | **2.64** | 5.50 | Surge* |
-| SWPP | 2.73 | **2.33** | operator |
-| PJM | 2.86 | **2.43** | operator |
-| NYIS | **3.15** | 3.27 | Surge |
-| ERCO | 3.17 | **2.13** | operator |
-| ISNE | 4.89 | **2.77** | operator |
-| **mean** | **3.09** | **3.03** | parity |
+| ERCO | 2.13 | **2.16** | consistent; the one clean comparison |
+| PJM | 2.43 | **1.43** | `DF` is a worse product than PJM's own forecast |
+| CISO | 5.50 | **2.04** | `DF` is broken for CAISO; see below |
+| MISO | 2.78 | 1.6 (daily peak only) | different metric, not comparable |
+| NYIS, ISNE, SWPP | — | not published | no comparison possible |
 
-Seasonal-naive(168h) scores 8.42% on the same hours.
+So the earlier "parity" framing was wrong, and wrong in our favour for the third
+time. Restricted to the three RTOs where a comparable operator number exists:
 
-Three caveats, all of which cut against Surge:
+| | PJM | ERCO | CISO | mean |
+|---|---:|---:|---:|---:|
+| Surge, zero-shot, calendar-only | 2.86 | 3.17 | 2.64 | **2.89** |
+| Operator, published | 1.43 | 2.16 | 2.04 | **1.88** |
 
-- **Lead time is not equalized.** Surge forecasts from a 00:00 UTC origin for
-  that same day, so leads are 1–24 h. EIA's `DF` is a genuine day-ahead
-  submission with leads closer to 24–48 h. Surge is being graded on an easier
-  task, so the true gap is larger than shown.
-- **CISO is not a real win.** Its `DF` field carries a large midday
-  behind-the-meter-solar artifact, so Surge is beating a broken column.
-- Data is `retrospective_final`, not the vintage available at forecast time.
+**Surge is about one percentage point behind the operators**, not at parity. The
+gap is still understated, because Surge forecasts from a same-day 00:00 UTC
+origin (1-24 h leads) while PJM issues at 18:00 D-1 and CAISO around 10:00 PT
+D-1 (14-38 h leads).
+
+The seven-RTO "operator mean of 3.03" is retired. It averaged three real
+measurements, one broken column, and three numbers that measure nothing
+published.
+
+### CISO: the cause was not behind-the-meter solar
+
+An earlier version of this document attributed CISO's `DF` error to
+behind-the-meter PV. **That attribution was wrong, and wrong on the sign.** If
+`DF` were gross load and `D` were net of BTM PV, `DF` would sit *above* `D` at
+midday. The observed midday error is strongly negative, and it grows over time
+while BTM PV was already large at the start:
+
+| Year | Signed `DF` error, local midday | All-hours MAPE |
+|---|---:|---:|
+| 2020 | +0.7% | 2.32 |
+| 2021 | −2.1% | 2.09 |
+| 2022 | −4.3% | 3.56 |
+| 2023 | −9.4% | 5.50 |
+| 2024 | −16.0% | 6.98 |
+| 2025 | −21.5% | 8.15 |
+
+In 2020-21 the column agreed with CAISO's published ~2%. The divergence tracks
+CAISO's battery fleet, which went from roughly nothing to about 13 GW over the
+same window, and midday is when it charges. CAISO defines its own load as the
+forecast component plus pumps and the charging side of storage, while EIA-930's
+`D = NG - TI` still contains that charging.
+
+The likely mechanism is therefore a storage-charging definitional wedge: `DF`
+excludes storage charging and `D` does not. This is inference. Neither EIA nor
+CAISO documents it, and it should be described as unexplained divergence rather
+than asserted as fact.
 
 Against *published* load-only deep-learning baselines at the same horizon
 (arXiv:2602.21415: MISO 2.33, ERCOT 2.85, PJM 2.97, CAISO 3.12, SPP 3.43,
@@ -162,9 +198,10 @@ and the uncertainty estimate is honest about it.
 - Surge is competitive with published open load-forecasting baselines.
 - Blending the foundation model with the open GBM baseline beats either alone by
   4.9%, measured on data that did not choose the blend weight.
-- Surge is **not** established as better than RTO operators' own day-ahead
-  forecasts: the blend leads on identical hours, but Surge's lead time is
-  shorter, and `DF` is not comparable across BAs.
+- Surge is **about one percentage point behind** the three operators that
+  publish their own day-ahead accuracy, and the gap is understated because
+  Surge's forecast lead time is shorter.
+- No operator baseline may be derived from EIA-930 `DF` again.
 - No locked-test accuracy claim exists for v0.2; that lane was consumed by a
   fail-closed error before any metric was produced.
 - Interval coverage claims require the calibration lane to ship first.

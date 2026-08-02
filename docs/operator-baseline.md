@@ -62,6 +62,30 @@ add to the published timestamp -- and a test pins them together. A measurement
 that read backwards from the correction it validates would be worse than no
 measurement at all.
 
+## `DF` is not the operator's forecast, and only ERCOT's is trustworthy
+
+Cross-checked against what the operators publish for 2024:
+
+| RTO | `DF`-derived | Operator, published | Reading |
+|---|---:|---:|---|
+| ERCO | 2.13 | 2.16 | faithful; the one validated case |
+| PJM | 2.43 | 1.43 | `DF` is a worse product than PJM's own forecast |
+| CISO | 5.50 | 2.04 | `DF` diverges from `D` by a growing definitional wedge |
+
+Every discrepancy ran in Surge's favour. ERCOT's near-exact match is the only
+evidence that this column is ever a usable proxy, which is why it is recorded
+here rather than assumed.
+
+The CISO divergence is not behind-the-meter solar: the midday signed error runs
+from +0.7% in 2020 to −21.5% in 2025, and the sign is backwards for a
+net-of-solar series. It tracks CAISO's battery buildout instead. CAISO counts
+storage charging in its own load definition and EIA-930's `D = NG - TI` also
+contains it, while `DF` appears not to. Treat that as unexplained divergence,
+not as an established mechanism.
+
+**Do not build a published operator baseline from `DF` for any BA except ERCO
+without first checking it against that operator's own published figure.**
+
 ## `DF` is not comparable across balancing authorities
 
 EIA's form instructions ask each BA to report "the day-ahead demand forecast

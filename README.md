@@ -39,13 +39,23 @@ freshness promise.
 > This overstated their error by 39.5% and 14.1%. After correction, "PJM: 1.70x
 > better" becomes 1.22x.
 >
-> A correct measurement on 2024 uses calendar-only inputs, an hour-corrected
-> operator, and the same target hours. **Surge averages 3.09% MAPE against the
-> operators' 3.03%, and loses on four of seven RTOs.** Surge also has a shorter
-> forecast lead time, which makes even this result too favorable.
+> **Surge is behind the grid operators.** On the 2024 validation lane, Surge
+> averages 3.09% MAPE across seven RTOs. Three operators publish their own
+> day-ahead accuracy: PJM 1.43%, ERCOT 2.16%, and CAISO 2.04%. On those three
+> RTOs Surge scores 2.89% against their 1.88%. Surge is about one percentage
+> point behind.
 >
-> Surge is competitive with published open baselines. Surge is not better than
-> the operators today.
+> The true gap is larger. Surge forecasts from a 00:00 UTC same-day origin, so
+> its leads are 1 to 24 hours. The operators issue theirs the afternoon before,
+> with leads of 14 to 38 hours. Surge gets the easier task.
+>
+> **Surge no longer publishes an operator baseline built from EIA-930.** The
+> `DF` column is not the forecast the operator uses. The EIA form instructions
+> excuse each respondent from making `DF` consistent with the `D` beside it, and
+> EIA warns that the comparison "is not very meaningful" for some BAs. We
+> checked: for ERCOT the column matches the published 2.16% almost exactly, but
+> PJM reads 2.43% against a published 1.43%, and CAISO reads 5.50% against a
+> published 2.04%. Every difference favored Surge.
 >
 > The shipped `surge-fm-v3` intervals are too narrow. Its own published
 > evaluation reports 0.725 coverage for a nominal 80% band.
@@ -97,14 +107,27 @@ The blend weight comes from the first half of 2024 only. The table reports the
 second half, which did not choose that weight. Every RTO improves over its own
 best single model, by 1.3% to 6.6%.
 
+Against the operators, on the three RTOs that publish day-ahead accuracy:
+
+| RTO | Surge | Operator, published |
+|---|---:|---:|
+| PJM | 2.86 | 1.43 |
+| ERCO | 3.17 | 2.16 |
+| CISO | 2.64 | 2.04 |
+| **mean** | **2.89** | **1.88** |
+
+MISO, NYISO, ISO-NE and SPP publish no comparable hourly day-ahead MAPE. Surge
+reports its own number for those four RTOs, and shows no operator column,
+instead of a proxy.
+
 Calibration corrects the intervals. Replayed across 2024, the worst per-RTO
 coverage error falls from 7.54 points to 1.19 points. Interval width grows by
 10% to 20%.
 
 Note: ISO-NE is the hardest RTO for both models, at about 4.9% MAPE. Its EIA-930
 series is net load, and several GW of behind-the-meter solar are invisible in the
-inputs. About 1.5 of the 2.1-point gap to the operator needs an irradiance
-forecast that Surge does not use.
+inputs. About 1.5 of that gap needs an irradiance forecast that Surge does not
+use.
 
 ## Install
 
