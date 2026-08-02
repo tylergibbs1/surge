@@ -17,6 +17,37 @@ from surge.scrapers.base import client, get
 
 API = "https://api.eia.gov/v2/electricity/rto/region-data/data/"
 
+# EIA-930 leaks sentinels and hard zeros into the demand column: an int32-max
+# value for PJM (2,147,480,000 MW), 3.6 million MW for SWPP, and twelve exact
+# zeros for NYIS. Two of those NYIS zeros are what consumed the single
+# authorized v0.2 locked-test look, which failed closed on them mid-run.
+#
+# The feature layer already maps these to missing, so they never reached a
+# forecast, but that is a downstream rescue of data that should never have been
+# stored. Rejecting at the boundary means every later reader sees the same
+# thing, and the raw response is preserved in the vintage archive regardless, so
+# nothing is destroyed by refusing it here.
+#
+# The bound matches the feature layer's frozen validity rule exactly. They must
+# not drift apart: a value the store accepts and the feature layer rejects is
+# invisible until it fails something.
+PLAUSIBLE_LOAD_MW = (0.0, 200_000.0)
+
+
+def _reject_implausible_load(frame: pl.DataFrame, *, ba: str) -> pl.DataFrame:
+    """Null out physically impossible demand, keeping the hour itself."""
+    low, high = PLAUSIBLE_LOAD_MW
+    valid = pl.col("load_mw").is_between(low, high, closed="right")
+    rejected = int(frame.filter(pl.col("load_mw").is_not_null() & ~valid).height)
+    if rejected:
+        print(
+            f"eia-930 {ba}: nulled {rejected} implausible demand value(s) "
+            f"outside ({low:g}, {high:g}] MW"
+        )
+    return frame.with_columns(
+        pl.when(valid).then(pl.col("load_mw")).otherwise(None).alias("load_mw")
+    )
+
 
 def _api_key() -> str:
     key = os.environ.get("EIA_API_KEY")
@@ -97,6 +128,7 @@ def load(ba: str, start: str, end: str, *, force: bool = False) -> pl.DataFrame:
             pl.lit(as_of).alias("as_of"),
         )
     )
+    df = _reject_implausible_load(df, ba=ba)
     if force:
         store.append("load_hourly", df)
     else:

@@ -40,6 +40,11 @@ def features_for_hour(bd: BAData, target_idx: int, lags: tuple[int, ...] = (24, 
     feats = []
     for lag in lags:
         feats.append(bd.target[target_idx - lag] if target_idx - lag >= 0 else 0.0)
+    # ORACLE INPUT. Realized temperature at the *target* hour, which production
+    # never has. This is the archived v0.1 research lane and the exact pattern
+    # docs/accuracy-restatement.md retracts. It is kept for reproducing the old
+    # published numbers and must never be cited as a production baseline; see
+    # experiments/gbm_baseline.py for the honest, calendar-only one.
     feats.append(bd.covariates["temp_c"][target_idx])
     for k in ("hour_sin", "hour_cos", "dow_sin", "dow_cos", "is_weekend", "is_holiday"):
         feats.append(bd.covariates[k][target_idx])

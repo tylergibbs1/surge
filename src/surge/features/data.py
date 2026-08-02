@@ -47,6 +47,10 @@ def _calendar_for(ba: str, ts_utc: np.ndarray, spec: FeatureSpec) -> dict[str, n
     return local_calendar_covariates(ts_utc, timezone=zone)
 
 
+#: Demand outside this range is not a measurement. The ingest boundary refuses
+#: the same range, and a test pins the two together.
+LOAD_VALIDITY_MW = (0.0, 200_000.0)
+
 _ONE_HOUR = np.timedelta64(1, "h")
 MAX_LIVE_SOURCE_LAG_HOURS = 12
 _REQUIRED_LIVE_SOURCES = ("load_hourly", "weather_hourly")
@@ -266,7 +270,7 @@ def load_ba_data(
     if missing := required_load - set(load.columns):
         raise ValueError(f"load_hourly missing columns: {sorted(missing)}")
     load = load.with_columns(
-        pl.when(pl.col("load_mw").is_between(0, 200_000, closed="right"))
+        pl.when(pl.col("load_mw").is_between(*LOAD_VALIDITY_MW, closed="right"))
         .then(pl.col("load_mw"))
         .otherwise(None)
         .alias("load_mw")
