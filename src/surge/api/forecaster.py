@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from surge import calibration as calibration_module
 from surge import store
 from surge.features import (
     DEFAULT_QUANTILE_LEVELS,
@@ -21,6 +22,7 @@ from surge.features import (
     numpy_to_datetime,
 )
 from surge.model_loader import artifact_sha256
+from surge.verification import MATURITY_HOURS
 
 # The old Surge v3 checkpoint used a legacy feature/training contract and must
 # not be presented as a v0.2 no-peeking model. Default to a pinned upstream
@@ -193,6 +195,22 @@ def forecast_ba(
     stop = start + horizon
     quantiles = quantiles[start:stop]
     means = means[start:stop]
+
+    # The model's raw 80% band has measured ~0.73-0.76 coverage. Calibrate it
+    # against this BA's own settled history before publishing. Fails open: with
+    # too little matured history the model interval is served unchanged and the
+    # issuance says so.
+    calibrated_low, calibrated_high, calibration = calibration_module.calibrate(
+        quantiles[:, 0],
+        quantiles[:, 2],
+        history=calibration_module.matured_history(
+            ba,
+            now_utc=bundle.issued_at_utc,
+            horizon=horizon,
+            outcome_delay_hours=MATURITY_HOURS,
+        ),
+    )
+
     points: list[dict[str, Any]] = []
     for index, timestamp in enumerate(bundle.served_ts_utc):
         valid_at = numpy_to_datetime(timestamp)
@@ -208,10 +226,12 @@ def forecast_ba(
                     (valid_at - bundle.issued_at_utc).total_seconds() // 60
                 ),
                 "mean_mw": float(means[index]),
-                "p10_mw": float(quantiles[index, 0]),
+                "p10_mw": float(calibrated_low[index]),
                 "p50_mw": p50,
                 "median_mw": p50,
-                "p90_mw": float(quantiles[index, 2]),
+                "p90_mw": float(calibrated_high[index]),
+                "model_p10_mw": float(quantiles[index, 0]),
+                "model_p90_mw": float(quantiles[index, 2]),
                 # LOAD_V2_CORE has no future temperature input. Keep nullable
                 # compatibility fields explicit so clients cannot mistake an
                 # observed or persisted value for a weather forecast.
@@ -230,6 +250,7 @@ def forecast_ba(
         "feature_snapshot_sha256": bundle.feature_snapshot_sha256,
         "model_feature_spec_sha256": MODEL_FEATURE_SPEC_SHA256,
         "model_release_safe": release_safe,
+        **calibration.as_provenance(),
     }
     return {
         "points": points,

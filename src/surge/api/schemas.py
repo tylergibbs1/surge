@@ -19,8 +19,24 @@ class ForecastPoint(BaseModel):
     ts_utc: datetime
     mean_mw: float = Field(..., description="Predictive mean; the public point estimate is p50")
     median_mw: float = Field(..., description="Point forecast (median)")
-    p10_mw: float = Field(..., description="10th percentile — lower end of 80% PI")
-    p90_mw: float = Field(..., description="90th percentile — upper end of 80% PI")
+    p10_mw: float = Field(
+        ...,
+        description="10th percentile — lower end of the published 80% PI, "
+        "after conformal calibration when it applied",
+    )
+    p90_mw: float = Field(
+        ...,
+        description="90th percentile — upper end of the published 80% PI, "
+        "after conformal calibration when it applied",
+    )
+    model_p10_mw: float | None = Field(
+        None,
+        description="The model's own p10 before calibration. Published so a "
+        "widened or tightened interval can be audited against its source.",
+    )
+    model_p90_mw: float | None = Field(
+        None, description="The model's own p90 before calibration."
+    )
     temp_c: float | None = Field(
         None,
         description="Forecast-vintage temperature at the BA station (°C), when used. "
