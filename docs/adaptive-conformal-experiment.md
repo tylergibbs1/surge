@@ -88,20 +88,63 @@ Result in `artifacts/adaptive-conformal-replication-2023.json`:
 | Fixed level, window 168 | 0.8258 | 0.0518 | 0.9976 | no |
 | Frozen adaptive, γ=0.05, w=168 | 0.8033 | 0.0222 | 0.9935 | **no** |
 
-**The 2024 pass did not replicate.** Worst-case error came in at 2.22 points
-against a 2-point bar, missing it — ISNE over-covered at 0.822, the same RTO
-that breaks the fixed level. So the honest conclusion is narrower than the 2024
-half suggested:
+**The 2024 pass did not replicate on 2023.** Worst-case error came in at 2.22
+points against a 2-point bar, missing it, with ISNE over-covering at 0.822.
 
-- Adaptive calibration is a robust *improvement*: on both cohorts it roughly
-  halves the worst per-RTO coverage error relative to the fixed level (2.2 vs
-  5.2 points on 2023; 1.4 vs 4.0 on the 2024 half) and costs less interval
-  score. On 2023 it also beat the uncalibrated forecasts outright.
-- It is **not** a reliable ±2-point per-RTO guarantee. Meeting that bar on the
-  2024 half was partly cohort luck.
-- ISNE is the persistent offender in every configuration and both cohorts,
-  which points at a base-model quantile problem specific to that RTO rather
-  than a calibration-window problem.
+Widening to four cohorts puts that failure in proportion. Per-series adaptive
+calibration at γ ∈ {0.02, 0.05}, window 168, worst per-RTO coverage error:
+
+| Cohort | Adaptive | Fixed level | Adaptive meets ±2pt |
+|---|---:|---:|:--:|
+| 2021 | 0.0042–0.0081 | 0.0343 | yes |
+| 2022 | 0.0080–0.0110 | 0.0376 | yes |
+| 2023 | 0.0222–0.0236 | 0.0518 | **no** |
+| 2024, reporting half | 0.0140 | 0.0399 | yes |
+
+So the honest conclusion:
+
+- Adaptive calibration is a large and consistent improvement. It cuts the worst
+  per-RTO coverage error by roughly three to eight times versus the fixed level,
+  on every cohort tested, and on 2021–2023 it also beats the uncalibrated
+  forecasts on interval score.
+- It clears the ±2-point bar on three of four cohorts and misses on 2023 alone.
+  That is not a guarantee, and the ablation's single-cohort pass overstated it.
+- The 2023 failure is **not** a persistent per-RTO defect. ISNE is well
+  calibrated in 2021 (0.807) and 2022 (0.805) and only drifts in 2023 (0.822)
+  and the 2024 half. Whatever breaks it is recent and time-varying, not
+  structural to that RTO.
+
+## Can tuning fix 2023? No
+
+`artifacts/adaptive-conformal-grid/` characterizes 16 adaptive policies —
+γ ∈ {0.02, 0.05, 0.1, 0.2} × window ∈ {56, 168} × both alpha scopes — plus two
+fixed-level references, against all of 2021, 2022 and 2023. One inference pass
+per cohort; no selection step. Worst per-RTO coverage error, bar 0.02:
+
+| Policy | 2021 | 2022 | 2023 |
+|---|---:|---:|---:|
+| per-series, γ=0.05, w=168 | 0.0042 | 0.0080 | 0.0222 |
+| per-series, γ=0.05, w=56 | 0.0047 | 0.0045 | 0.0255 |
+| per-series, γ=0.1, w=168 | 0.0051 | 0.0051 | 0.0273 |
+| per-series, γ=0.2, w=168 | 0.0082 | 0.0118 | 0.0311 |
+| per-lead, best | 0.0232 | 0.0292 | 0.0418 |
+| fixed level, best | 0.0325 | 0.0358 | 0.0518 |
+
+**No policy in the grid meets the bar on all three cohorts.** Three findings
+worth keeping:
+
+1. Sharing one level across a series' leads dominates per-lead adaptation
+   everywhere, by a factor of three to five. On a one-year cohort a per-lead
+   level simply does not see enough matured outcomes.
+2. Raising γ makes 2023 *worse*, not better (0.0222 → 0.0273 → 0.0311). The
+   2023 miss is therefore not an adaptation-speed problem, which rules out the
+   obvious fix.
+3. The policy the 2024 search selected is also the best of the grid on 2023.
+   The selection was sound; the target was simply not reachable by tuning these
+   knobs.
+
+The open question is what changed for ISNE in 2023 and stayed changed into
+2024. That is a base-model or data question, not a calibration one.
 
 Both runs executed on CPU in `float32`, not the frozen H100 `bfloat16` runtime
 identity; each artifact's `runtime` block records this.
