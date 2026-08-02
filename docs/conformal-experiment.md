@@ -55,3 +55,40 @@ The stdout prefix remains `CALIBRATION_RESULT:`. `--out` is written atomically.
 For compatibility, `best` and `candidates` contain inner-selection results;
 `outer_validation.result` is the untouched reporting result and must not be
 used to revise the selected policy.
+
+## Result
+
+`artifacts/conformal-validation.json` is the first and only execution of this
+protocol. It used the pinned `amazon/chronos-2` revision, code revision
+`8284c88a0d3bb9cf49cdd41b420549d2a90bc7dc`, and the frozen data snapshot
+`77d80d40...`. The 2025 lane was not opened (`held_out_test_lane` is
+`not-opened`).
+
+**The predeclared selection rule found no qualifying policy.** Zero of twelve
+candidates kept every RTO's empirical coverage within two percentage points of
+80% on the inner half, so `selection.rule_applied` is
+`fallback-minimum-relative-score-no-candidate-met-coverage`. The reported
+policy is the fallback minimum-relative-score candidate: all-seven-RTO
+normalized-block pooling over a 56 mature-origin window.
+
+Reported on the untouched second half of 2024 (2024-07-02 to 2024-12-31,
+25,508 points):
+
+| | Coverage | Mean width (MW) | Macro interval score |
+|---|---:|---:|---:|
+| Uncalibrated | 0.7623 | 3401.5 | — |
+| Calibrated | 0.8076 | 3789.2 | 0.9923× uncalibrated |
+
+Rolling-origin conformal calibration therefore removes most of the aggregate
+under-coverage — 76.2% to 80.8% against an 80% nominal interval — for about
+11% wider intervals and a 0.77% macro interval-score improvement. It does not
+equalize coverage across RTOs: ISNE reaches 83.3% and SWPP 82.9%, so the worst
+per-RTO coverage error is 3.35 percentage points, still outside the ±2-point
+tolerance. Under-coverage is a systematic property of the base model's
+quantiles that a single shared window cannot correct uniformly.
+
+Two limitations bound this result. The run executed on CPU in `float32`, not
+the frozen H100 `bfloat16` runtime identity used for model selection; the
+`runtime` block records this. And the calibration policy is not applied by the
+serving path — `src/surge/verification.py` measures
+`pi80_calibration_error_pct` but no forecaster consumes these adjustments.
