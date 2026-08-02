@@ -56,3 +56,49 @@ def test_an_overlapping_declaration_is_rejected() -> None:
 def test_every_declaration_names_the_document_that_froze_it() -> None:
     for declaration in DECLARATIONS.values():
         assert declaration.frozen_by.endswith(".md")
+
+
+def test_the_frozen_v02_feature_contract_hash_is_unchanged() -> None:
+    """Adding a calendar basis must not silently redefine a published contract."""
+    from surge.features.spec import LOAD_V2_CORE
+
+    assert (
+        LOAD_V2_CORE.sha256
+        == "84a740bfe11062e6db03ac8ea61fe727f0c587abed4de89eff3e5c295054cdeb"
+    )
+    assert LOAD_V2_CORE.calendar_basis == "utc"
+
+
+def test_the_local_calendar_contract_is_a_distinct_identity() -> None:
+    from surge.features.spec import LOAD_V2_CORE, LOAD_V3_CORE
+
+    assert LOAD_V3_CORE.calendar_basis == "ba-local"
+    assert LOAD_V3_CORE.sha256 != LOAD_V2_CORE.sha256
+
+
+def test_the_local_calendar_refuses_a_ba_with_no_known_zone() -> None:
+    """A guessed zone would misalign every weekend and holiday flag."""
+    import numpy as np
+
+    from surge.features.data import _calendar_for
+    from surge.features.spec import LOAD_V3_CORE, FeatureContractError
+
+    stamps = np.arange(
+        np.datetime64("2024-01-01T00", "h"), np.datetime64("2024-01-03T00", "h")
+    )
+    with pytest.raises(FeatureContractError, match="needs a known IANA zone"):
+        _calendar_for("AZPS", stamps, LOAD_V3_CORE)
+
+
+def test_local_flags_differ_from_utc_flags_where_it_matters() -> None:
+    import numpy as np
+
+    from surge.features.data import _calendar_for
+    from surge.features.spec import LOAD_V2_CORE, LOAD_V3_CORE
+
+    stamps = np.arange(
+        np.datetime64("2024-01-01T00", "h"), np.datetime64("2025-01-01T00", "h")
+    )
+    utc = _calendar_for("CISO", stamps, LOAD_V2_CORE)
+    local = _calendar_for("CISO", stamps, LOAD_V3_CORE)
+    assert int((utc["is_weekend"] != local["is_weekend"]).sum()) == 772

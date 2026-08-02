@@ -11,16 +11,41 @@ from typing import Any
 import numpy as np
 import polars as pl
 
+from surge import bas as _bas
 from surge import store
 from surge.features.calendar import (
     as_utc,
     calendar_covariates,
     datetime_to_numpy,
+    local_calendar_covariates,
     next_full_utc_hour,
     numpy_to_datetime,
 )
-from surge.features.spec import LOAD_V2_CORE, AvailabilityMode, FeatureSpec, validate_task
+from surge.features.spec import (
+    LOAD_V2_CORE,
+    AvailabilityMode,
+    FeatureContractError,
+    FeatureSpec,
+    validate_task,
+)
 from surge.features.splits import ACTIVE as ACTIVE_SPLIT
+
+
+def _calendar_for(ba: str, ts_utc: np.ndarray, spec: FeatureSpec) -> dict[str, np.ndarray]:
+    """Build calendar covariates on the clock the contract declares."""
+    if spec.calendar_basis == "utc":
+        return calendar_covariates(ts_utc)
+    if spec.calendar_basis != "ba-local":
+        raise FeatureContractError(f"unknown calendar basis {spec.calendar_basis!r}")
+    zone = _bas.timezone(ba)
+    if zone is None:
+        # Guessing a zone would be worse than refusing: a wrong one silently
+        # misaligns every weekend and holiday flag.
+        raise FeatureContractError(
+            f"{spec.version} needs a known IANA zone for {ba}; add it to surge.bas"
+        )
+    return local_calendar_covariates(ts_utc, timezone=zone)
+
 
 _ONE_HOUR = np.timedelta64(1, "h")
 MAX_LIVE_SOURCE_LAG_HOURS = 12
@@ -320,7 +345,7 @@ def load_ba_data(
     target = aligned.pop("load_mw").astype(np.float32)
     covariates = {
         "temp_c": aligned.pop("temp_c").astype(np.float32),
-        **calendar_covariates(ts_utc),
+        **_calendar_for(ba, ts_utc, spec),
         **{key: value.astype(np.float32) for key, value in aligned.items()},
     }
     years = ts_utc.astype("datetime64[Y]").astype(np.int64) + 1970

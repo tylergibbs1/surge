@@ -45,6 +45,10 @@ class FeatureSpec:
     future_covariates: tuple[str, ...]
     forbidden_future_covariates: tuple[str, ...]
     frequency_minutes: int = 60
+    #: Which clock the calendar covariates are derived from. "utc" is the
+    #: original v2 behaviour; "ba-local" derives weekend and holiday flags from
+    #: the BA's own wall clock, which is what actually drives load behaviour.
+    calendar_basis: str = "utc"
 
     @property
     def sha256(self) -> str:
@@ -57,6 +61,13 @@ class FeatureSpec:
                 "future_covariates": self.future_covariates,
                 "forbidden_future_covariates": self.forbidden_future_covariates,
                 "frequency_minutes": self.frequency_minutes,
+                # Omitted when default so that adding this field did not silently
+                # change the hash of the already-frozen load-v2-core contract.
+                **(
+                    {}
+                    if self.calendar_basis == "utc"
+                    else {"calendar_basis": self.calendar_basis}
+                ),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -78,6 +89,21 @@ LOAD_V2_CORE = FeatureSpec(
     optional_past_covariates=("wind_mw", "solar_mw"),
     future_covariates=CALENDAR_COVARIATES,
     forbidden_future_covariates=OBSERVED_COVARIATES,
+)
+
+# v3 changes exactly one thing: the calendar covariates come from the BA's own
+# wall clock. Over 2024 the UTC weekend flag was wrong for 772 CISO hours, 525
+# of them inside the local evening peak, and the holiday flag is misaligned the
+# same way. Everything else is identical to v2, so an A/B measures the clock
+# alone. It requires a known IANA zone and refuses to build without one.
+LOAD_V3_CORE = FeatureSpec(
+    version="load-v3-core",
+    target="load_mw",
+    required_past_covariates=("temp_c", *CALENDAR_COVARIATES),
+    optional_past_covariates=("wind_mw", "solar_mw"),
+    future_covariates=CALENDAR_COVARIATES,
+    forbidden_future_covariates=OBSERVED_COVARIATES,
+    calendar_basis="ba-local",
 )
 
 DEFAULT_QUANTILE_LEVELS = (0.1, 0.5, 0.9)
