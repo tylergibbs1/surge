@@ -55,6 +55,12 @@ PAIRED_VALIDATION_BOOTSTRAP_SAMPLES = 2_000
 PAIRED_VALIDATION_BOOTSTRAP_SEED = 42
 PAIRED_VALIDATION_BOOTSTRAP_BLOCK_ORIGINS = 7
 _EPSILON = 1e-12
+_LOCKED_FAILURE_MESSAGE_MAX_LENGTH = 512
+_LOCKED_FAILURE_SECRET_RE = re.compile(
+    r"(?i)\b(token|api[-_]?key|secret|password|authorization)\b"
+    r"(\s*(?::|=)\s*|\s+)((?:bearer\s+)?[^\s,;]+)"
+)
+_LOCKED_FAILURE_BEARER_RE = re.compile(r"(?i)\bbearer\s+[^\s,;]+")
 
 
 @dataclass(frozen=True)
@@ -120,6 +126,85 @@ def _link_exclusive_json(path: Path, value: dict[str, Any]) -> None:
         os.link(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _replace_json_atomically(path: Path, value: dict[str, Any]) -> None:
+    """Replace one JSON record atomically after fsyncing its complete payload."""
+    temporary = path.parent / f".{path.name}.{uuid.uuid4().hex}.tmp"
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(
+                value,
+                handle,
+                indent=2,
+                sort_keys=True,
+                default=str,
+                allow_nan=False,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _locked_test_started_records(receipt_path: Path) -> tuple[dict[str, Any], Path]:
+    """Load matching started receipt/registry records before a terminal update."""
+    path = receipt_path.expanduser().resolve()
+    receipt = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(receipt, dict) or receipt.get("status") != "started":
+        raise ValueError("locked-test receipt is not in the started state")
+    reservation_value = receipt.get("registry_reservation")
+    if not isinstance(reservation_value, str):
+        raise ValueError("locked-test receipt is missing its registry reservation")
+    reservation_path = Path(reservation_value).expanduser().resolve()
+    if not reservation_path.is_file():
+        raise ValueError("locked-test registry reservation is missing")
+    reservation = json.loads(reservation_path.read_text(encoding="utf-8"))
+    if reservation != receipt:
+        raise ValueError("locked-test receipt and registry reservation do not match")
+    return receipt, reservation_path
+
+
+def _terminalize_locked_test_run(
+    receipt_path: Path,
+    terminal_fields: dict[str, Any],
+) -> None:
+    """Publish the same immutable terminal state to both locked-test records."""
+    path = receipt_path.expanduser().resolve()
+    receipt, reservation_path = _locked_test_started_records(path)
+    terminal = {**receipt, **terminal_fields}
+    # The operator-controlled registry is authoritative for second-look
+    # rejection, so transition it first. Each destination observes either the
+    # complete started record or the complete terminal record, never partial JSON.
+    _replace_json_atomically(reservation_path, terminal)
+    _replace_json_atomically(path, terminal)
+
+
+def _sanitize_locked_test_failure(exc: BaseException) -> dict[str, str]:
+    """Return a bounded, single-line exception summary without traceback/secrets."""
+    exception_type = re.sub(r"[^A-Za-z0-9_.-]", "_", type(exc).__name__)[:128]
+    try:
+        raw_message = str(exc)
+    except Exception:
+        raw_message = "<message unavailable>"
+    printable_message = "".join(
+        character if character.isprintable() else " " for character in raw_message
+    )
+    message = " ".join(printable_message.split())
+    message = _LOCKED_FAILURE_SECRET_RE.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}<redacted>",
+        message,
+    )
+    message = _LOCKED_FAILURE_BEARER_RE.sub("Bearer <redacted>", message)
+    if len(message) > _LOCKED_FAILURE_MESSAGE_MAX_LENGTH:
+        message = message[: _LOCKED_FAILURE_MESSAGE_MAX_LENGTH - 3] + "..."
+    return {
+        "exception_type": exception_type or "Exception",
+        "message": message,
+    }
 
 
 def reproducibility_environment_versions() -> dict[str, str]:
@@ -1103,10 +1188,6 @@ def reserve_locked_test_run(
 
 def complete_locked_test_run(receipt_path: Path, result: dict[str, Any]) -> None:
     """Complete a previously reserved receipt with the immutable metric payload."""
-    path = receipt_path.expanduser().resolve()
-    receipt = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(receipt, dict) or receipt.get("status") != "started":
-        raise ValueError("locked-test receipt is not in the started state")
     encoded_result = json.dumps(
         result,
         sort_keys=True,
@@ -1114,48 +1195,35 @@ def complete_locked_test_run(receipt_path: Path, result: dict[str, Any]) -> None
         default=str,
         allow_nan=False,
     ).encode()
-    receipt.update(
+    _terminalize_locked_test_run(
+        receipt_path,
         {
             "status": "completed",
             "completed_at_utc": datetime.now(tz=UTC).isoformat(),
             "result_sha256": hashlib.sha256(encoded_result).hexdigest(),
             "result": result,
-        }
+        },
     )
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(
-            receipt,
-            indent=2,
-            sort_keys=True,
-            default=str,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
+
+
+def fail_locked_test_run(receipt_path: Path, exc: BaseException) -> None:
+    """Record a post-reservation exception as an immutable terminal failure."""
+    failure = _sanitize_locked_test_failure(exc)
+    encoded_failure = json.dumps(
+        failure,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode()
+    _terminalize_locked_test_run(
+        receipt_path,
+        {
+            "status": "failed",
+            "failed_at_utc": datetime.now(tz=UTC).isoformat(),
+            "failure_sha256": hashlib.sha256(encoded_failure).hexdigest(),
+            "failure": failure,
+        },
     )
-    temporary.replace(path)
-    reservation_value = receipt.get("registry_reservation")
-    if not isinstance(reservation_value, str):
-        raise ValueError("locked-test receipt is missing its registry reservation")
-    reservation_path = Path(reservation_value).expanduser().resolve()
-    if not reservation_path.is_file():
-        raise ValueError("locked-test registry reservation is missing")
-    registry_temporary = reservation_path.with_suffix(
-        reservation_path.suffix + ".tmp"
-    )
-    registry_temporary.write_text(
-        json.dumps(
-            receipt,
-            indent=2,
-            sort_keys=True,
-            default=str,
-            allow_nan=False,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    registry_temporary.replace(reservation_path)
 
 
 def validate_promotion_inputs(

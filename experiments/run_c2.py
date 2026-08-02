@@ -20,8 +20,9 @@ Config keys:
     batch_size    int   16
 
 The locked test atomically creates ``surge-locked-test-receipt.json`` next to
-the promotion marker before any 2025 rows are loaded. A crash still consumes
-the run; this is the fail-closed behavior required by the protocol.
+the promotion marker before any 2025 rows are loaded. A catchable exception
+after reservation records a terminal failure in both receipt and registry; an
+abrupt process loss leaves ``started``. Either state consumes the run.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -39,6 +41,7 @@ from experiments.features import load_multi_ba
 from experiments.overfit import (
     complete_locked_test_run,
     configure_reproducible_runtime,
+    fail_locked_test_run,
     reproducibility_environment_versions,
     reproducibility_runtime_identity,
     reserve_locked_test_run,
@@ -104,7 +107,7 @@ def _record_and_emit_result(
     print("METRIC:", json.dumps(display_result, allow_nan=False), flush=True)
 
 
-def main() -> None:
+def _main(on_locked_test_reserved: Callable[[Path], None]) -> None:
     import torch
 
     exp_name = sys.argv[1]
@@ -270,6 +273,7 @@ def main() -> None:
             model_artifact_sha256=promotion_artifact["model_artifact_sha256"],
             registry_root=Path(registry_value),
         )
+        on_locked_test_reserved(locked_test_receipt)
     if locked_data_root is not None:
         # Byte identity is checked before reservation; semantic verification is
         # intentionally after it because this step materializes locked rows.
@@ -408,6 +412,28 @@ def main() -> None:
         eval_s=eval_s,
         locked_test_receipt=locked_test_receipt,
     )
+
+
+def main() -> None:
+    """Run evaluation, terminally recording any post-reservation failure."""
+    locked_test_receipt: Path | None = None
+
+    def remember_locked_test_receipt(path: Path) -> None:
+        nonlocal locked_test_receipt
+        locked_test_receipt = path
+
+    try:
+        _main(remember_locked_test_receipt)
+    except BaseException as exc:
+        if locked_test_receipt is not None:
+            try:
+                fail_locked_test_run(locked_test_receipt, exc)
+            except Exception as recording_exc:
+                exc.add_note(
+                    "locked-test failure recording also failed: "
+                    f"{type(recording_exc).__name__}"
+                )
+        raise
 
 
 if __name__ == "__main__":

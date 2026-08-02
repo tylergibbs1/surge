@@ -1,0 +1,954 @@
+{
+  "created_at_utc": "2026-08-02T00:32:15.791680+00:00",
+  "datasets": {
+    "load_hourly": {
+      "ba_count": 53,
+      "end_utc": "2025-12-31T23:00:00+00:00",
+      "max_available_at_utc": "2026-05-10T20:36:22.904162+00:00",
+      "rows": 3240951,
+      "sources": [
+        "eia-930"
+      ],
+      "start_utc": "2019-01-01T00:00:00+00:00"
+    },
+    "weather_hourly": {
+      "ba_count": 53,
+      "end_utc": "2025-12-31T23:00:00+00:00",
+      "max_available_at_utc": "2026-05-11T00:24:00.919856+00:00",
+      "rows": 3681342,
+      "sources": [
+        "asos-iowa"
+      ],
+      "start_utc": "2018-01-01T00:00:00+00:00"
+    }
+  },
+  "files": [
+    {
+      "path": "load_hourly/year=2019/month=01/part.parquet",
+      "rows": 39432,
+      "sha256": "19cd57d84f9912e553dad46c4a777fea91152b6cba15b72a2b22b92080c8768a"
+    },
+    {
+      "path": "load_hourly/year=2019/month=02/part.parquet",
+      "rows": 35257,
+      "sha256": "19d116adefe7323f03766328ca77eb6c47bd5a87c32dea703cc20139719fb8ee"
+    },
+    {
+      "path": "load_hourly/year=2019/month=03/part.parquet",
+      "rows": 39207,
+      "sha256": "d7c4815db4feb83ac068c3489a9a7ac597df33f8614663914f3aea5d5175bcdc"
+    },
+    {
+      "path": "load_hourly/year=2019/month=04/part.parquet",
+      "rows": 37787,
+      "sha256": "e804c6633d7b9a60fe7cec935a6e7deb9bd1cb6bd29d6d20fa36219dfbfcd0cd"
+    },
+    {
+      "path": "load_hourly/year=2019/month=05/part.parquet",
+      "rows": 39432,
+      "sha256": "2aa6a0e7faa4dce35dcca058391ae698ffe13d73a27e0e8f6c7c94a06b880a17"
+    },
+    {
+      "path": "load_hourly/year=2019/month=06/part.parquet",
+      "rows": 38160,
+      "sha256": "c051f7b02e203c5968d3b4d490717f080777392c9f4e7d3729b098da6bf2cd5e"
+    },
+    {
+      "path": "load_hourly/year=2019/month=07/part.parquet",
+      "rows": 39432,
+      "sha256": "03fb50982491296ab2a0d443e2dc46c9e7df5c65784971eeafb280f0d82a0451"
+    },
+    {
+      "path": "load_hourly/year=2019/month=08/part.parquet",
+      "rows": 39120,
+      "sha256": "cb0cf3bb1e5cf9f54f31f35c3933f6b29286e977a5e54afb18369964c9d16152"
+    },
+    {
+      "path": "load_hourly/year=2019/month=09/part.parquet",
+      "rows": 38088,
+      "sha256": "01ac386cb7866ed0c9581182858494a0043ae60d602e225bdd1b0515f5fe4484"
+    },
+    {
+      "path": "load_hourly/year=2019/month=10/part.parquet",
+      "rows": 39432,
+      "sha256": "89d42762f1f8b5a84ee4b47ad5074bbd240d41322da5d58f2b2a5a025ec14a46"
+    },
+    {
+      "path": "load_hourly/year=2019/month=11/part.parquet",
+      "rows": 38135,
+      "sha256": "207a48fecf8944c7443f4886b74e1a460f4b34bf1ef0f8c04252bcece8e34212"
+    },
+    {
+      "path": "load_hourly/year=2019/month=12/part.parquet",
+      "rows": 39384,
+      "sha256": "9ba12c9ea80d0ce19ee0ce52fb42727e370f9489242385f570d422dab1461c75"
+    },
+    {
+      "path": "load_hourly/year=2020/month=01/part.parquet",
+      "rows": 38697,
+      "sha256": "ed7c3256155103b170b0c74145c6bfa185c07454556945711f152f4a4969fbf7"
+    },
+    {
+      "path": "load_hourly/year=2020/month=02/part.parquet",
+      "rows": 36184,
+      "sha256": "b0cdc39bef3197a6fab415f6e708340280bb63783cc6a81d43c8efba097620bf"
+    },
+    {
+      "path": "load_hourly/year=2020/month=03/part.parquet",
+      "rows": 38664,
+      "sha256": "efa120c099086bf15c6d3f5087f47a685aa431020df3ba00bb76569565464ac8"
+    },
+    {
+      "path": "load_hourly/year=2020/month=04/part.parquet",
+      "rows": 37488,
+      "sha256": "7790caf6fb15656284071ead2323501f21c84bee653a2329db18c6c45dd6822d"
+    },
+    {
+      "path": "load_hourly/year=2020/month=05/part.parquet",
+      "rows": 38688,
+      "sha256": "8d2052c2110bc2adb21cc9d567910bd3dd2664e56e4d704f5ef85503bdcd0801"
+    },
+    {
+      "path": "load_hourly/year=2020/month=06/part.parquet",
+      "rows": 37440,
+      "sha256": "c89503937876fca13726e19b354da7ce44a3a08497dce25b7036bd059b7dbc81"
+    },
+    {
+      "path": "load_hourly/year=2020/month=07/part.parquet",
+      "rows": 38688,
+      "sha256": "3183aef4ed88a4cf75a8a9df2aecfb8e79a387c8c81d03a8e986acc6403dcd6d"
+    },
+    {
+      "path": "load_hourly/year=2020/month=08/part.parquet",
+      "rows": 38688,
+      "sha256": "449b96d183ca50a85a8758c8c693f66f97ef3db908447d12c30816bd838b0833"
+    },
+    {
+      "path": "load_hourly/year=2020/month=09/part.parquet",
+      "rows": 37416,
+      "sha256": "e25573f9f08d6b44b31e8734da3d956d1b327f52a3d16a961b0dfbfda571fa74"
+    },
+    {
+      "path": "load_hourly/year=2020/month=10/part.parquet",
+      "rows": 38736,
+      "sha256": "38cfaf1986def9f219eb9d5bbb58e2f1e0578b9b0b2d5ad468791a99b840b6a2"
+    },
+    {
+      "path": "load_hourly/year=2020/month=11/part.parquet",
+      "rows": 37436,
+      "sha256": "fc63f5b281a563d1602a09a13263481539a33ba4e79d8edc61536a94686407de"
+    },
+    {
+      "path": "load_hourly/year=2020/month=12/part.parquet",
+      "rows": 38688,
+      "sha256": "9ef6f94c6a27df0fd5132966ec35d728d025a6b7fb97329b83eb72bc73e5eccd"
+    },
+    {
+      "path": "load_hourly/year=2021/month=01/part.parquet",
+      "rows": 39423,
+      "sha256": "48e6186c14d014571240f1841ea4af94efa73da60d5505ba8a01f7621f928e19"
+    },
+    {
+      "path": "load_hourly/year=2021/month=02/part.parquet",
+      "rows": 35360,
+      "sha256": "a0ff5ecb295008a0573bf1ccfef360010cd7026a0cee62274b293f1e211d2621"
+    },
+    {
+      "path": "load_hourly/year=2021/month=03/part.parquet",
+      "rows": 38919,
+      "sha256": "e062f60d5a4c3c7b8a388e0005f7c7735680d42cde7a407afeb5e3f2074b2637"
+    },
+    {
+      "path": "load_hourly/year=2021/month=04/part.parquet",
+      "rows": 38160,
+      "sha256": "c7c432e4098e3ddfb2bbf0b9a84855d3311ac979ce9ae4fec1d71859ad7babf2"
+    },
+    {
+      "path": "load_hourly/year=2021/month=05/part.parquet",
+      "rows": 39432,
+      "sha256": "e4bfc008fe25af0d01ceacc59c71d0cd568019bd1232d68f0662bdc69adac8ae"
+    },
+    {
+      "path": "load_hourly/year=2021/month=06/part.parquet",
+      "rows": 38160,
+      "sha256": "6a875c0ba999ce3ea8f3f2fdb359b2b90526434910e12eead4d69d1e0172f8d1"
+    },
+    {
+      "path": "load_hourly/year=2021/month=07/part.parquet",
+      "rows": 39432,
+      "sha256": "81c9cffe5cc91de6e1e77192162521920bcf06d8f382e0e514a41425b4345913"
+    },
+    {
+      "path": "load_hourly/year=2021/month=08/part.parquet",
+      "rows": 39432,
+      "sha256": "47c2672e33e7fbf8b67c389d04047bff5544c2f6d1b7901e4d8664663587cdc9"
+    },
+    {
+      "path": "load_hourly/year=2021/month=09/part.parquet",
+      "rows": 38160,
+      "sha256": "0d2ae1b984a58cddd0ad1515fa9e3c85cd09f4cfd6e8b577e542445aa6adecf2"
+    },
+    {
+      "path": "load_hourly/year=2021/month=10/part.parquet",
+      "rows": 39432,
+      "sha256": "12a5870e6bb5f83acbaa083252d361c89941148d6f42f43ab1f3225004b79a68"
+    },
+    {
+      "path": "load_hourly/year=2021/month=11/part.parquet",
+      "rows": 38144,
+      "sha256": "757d5ebb55fb2b69cac0e4c4368a93297ceff3fd16ad0bb6542fb317f37770db"
+    },
+    {
+      "path": "load_hourly/year=2021/month=12/part.parquet",
+      "rows": 39432,
+      "sha256": "2bca98c4af78dfd8744db66738797a2ebfa6e21f9af807530a5c33f51c09d3c8"
+    },
+    {
+      "path": "load_hourly/year=2022/month=01/part.parquet",
+      "rows": 39432,
+      "sha256": "0c72cd0c8fa10d7fbdc104f5cc41c9001947ef5e1d139d1a9046b8bb88c1df7e"
+    },
+    {
+      "path": "load_hourly/year=2022/month=02/part.parquet",
+      "rows": 35616,
+      "sha256": "60d701675cd12d778a3c6773ec0957190f1499c36e3e5ef79b1c79f09d01e4cc"
+    },
+    {
+      "path": "load_hourly/year=2022/month=03/part.parquet",
+      "rows": 39432,
+      "sha256": "f76cb13969aaa0bf475d27ae0fe5230283d42e6612acf4e184b6a1038e73b600"
+    },
+    {
+      "path": "load_hourly/year=2022/month=04/part.parquet",
+      "rows": 38160,
+      "sha256": "0e8fe3690103fb58d235341d37645712b1b22ec3d223f6d8605b114f69ced734"
+    },
+    {
+      "path": "load_hourly/year=2022/month=05/part.parquet",
+      "rows": 39432,
+      "sha256": "fb3d3a41a4572e883073f3c05d6d1432dd9a0cbd640041b063c746cd832f2081"
+    },
+    {
+      "path": "load_hourly/year=2022/month=06/part.parquet",
+      "rows": 38016,
+      "sha256": "91ed74e2a4adcf0a203e3cfcdda31c5490f41a4690da3d53ee651d727e1982ee"
+    },
+    {
+      "path": "load_hourly/year=2022/month=07/part.parquet",
+      "rows": 39432,
+      "sha256": "a471cc99f3633db85160024fb37ab2e5d7dbafa1ae4633eb3df3ed0d867bfdd5"
+    },
+    {
+      "path": "load_hourly/year=2022/month=08/part.parquet",
+      "rows": 39432,
+      "sha256": "ac3bcb6ed166f8ea3a57f871d337260c37cf76717adbf78d4c166a107f87d389"
+    },
+    {
+      "path": "load_hourly/year=2022/month=09/part.parquet",
+      "rows": 38160,
+      "sha256": "0e301737ea20a57fb9a926d0895d3e7e80a900af65676e6eabb4537a87914c4c"
+    },
+    {
+      "path": "load_hourly/year=2022/month=10/part.parquet",
+      "rows": 39432,
+      "sha256": "f2cb7490321fd7846a78dedcbd87b061dc5c61cbf77aceda96de69a1dcd52f40"
+    },
+    {
+      "path": "load_hourly/year=2022/month=11/part.parquet",
+      "rows": 38160,
+      "sha256": "eb9c34b82d6185278ad0f34f62850c5ef5713dba7ed1954004c5a36ab42d365f"
+    },
+    {
+      "path": "load_hourly/year=2022/month=12/part.parquet",
+      "rows": 39432,
+      "sha256": "97b4e2f417b93959716f89a81e38526e195502e4b959f2c207f0affae01c667b"
+    },
+    {
+      "path": "load_hourly/year=2023/month=01/part.parquet",
+      "rows": 39432,
+      "sha256": "2b0beecdc9908c63637daabe07bb44fcb95781c2ade3d1c8f54bd80e8afd50d1"
+    },
+    {
+      "path": "load_hourly/year=2023/month=02/part.parquet",
+      "rows": 35616,
+      "sha256": "3e95e7286846434dabf42c3d5846f2f3bf6523f20c05372f1c1d6456c73cebbe"
+    },
+    {
+      "path": "load_hourly/year=2023/month=03/part.parquet",
+      "rows": 39312,
+      "sha256": "11588e73c4ad8ed96a24ed197517725cbe94aab1032f5ac5df6f6548a486177f"
+    },
+    {
+      "path": "load_hourly/year=2023/month=04/part.parquet",
+      "rows": 38160,
+      "sha256": "4964d762a2b04e81f0a0a725b1b3e4343307ed8f57257cc2cb988bac3d22681a"
+    },
+    {
+      "path": "load_hourly/year=2023/month=05/part.parquet",
+      "rows": 39432,
+      "sha256": "4e5934020d5785d8837e31c1f53fefb44cf7267e7303539e890e2550852ee297"
+    },
+    {
+      "path": "load_hourly/year=2023/month=06/part.parquet",
+      "rows": 38160,
+      "sha256": "7d6151ddf92cbdc1272c4f6ad674b93865646cfb05f807c15216ef05646cd0c3"
+    },
+    {
+      "path": "load_hourly/year=2023/month=07/part.parquet",
+      "rows": 39432,
+      "sha256": "152efc35b2907ccab8d7bc4679ecbc8c0294bc694ae987a060109f377b6ba143"
+    },
+    {
+      "path": "load_hourly/year=2023/month=08/part.parquet",
+      "rows": 39432,
+      "sha256": "6b1d847a9c7cf25f3029ae3c37c8ca0fc0985323d204a1198e83af12806e0fb9"
+    },
+    {
+      "path": "load_hourly/year=2023/month=09/part.parquet",
+      "rows": 38160,
+      "sha256": "b980f748c533523d428e6c43960b69af335d1ea4bdd2276575a773d03bded599"
+    },
+    {
+      "path": "load_hourly/year=2023/month=10/part.parquet",
+      "rows": 39432,
+      "sha256": "4c6da15ffa5aa6507b92e59bdb0437c461a029ed3d169caddb1baab3bc2035cd"
+    },
+    {
+      "path": "load_hourly/year=2023/month=11/part.parquet",
+      "rows": 37988,
+      "sha256": "095ea6ee0b4ca93f6da6bc3b57ee72a67992038ac4a5c5493361f8050db65dcd"
+    },
+    {
+      "path": "load_hourly/year=2023/month=12/part.parquet",
+      "rows": 39432,
+      "sha256": "1824580ee7693bc6709ef8f69dadb95a2fbd95638a0328f886d41a369b45ce98"
+    },
+    {
+      "path": "load_hourly/year=2024/month=01/part.parquet",
+      "rows": 39408,
+      "sha256": "641de8debe2f711299e81b584c7b6cf8c9796636499cb6fbc78dee31637b4620"
+    },
+    {
+      "path": "load_hourly/year=2024/month=02/part.parquet",
+      "rows": 36888,
+      "sha256": "a288fef6d93d007c19b8afe59a2124f928907624dfa614948acf33d60a403066"
+    },
+    {
+      "path": "load_hourly/year=2024/month=03/part.parquet",
+      "rows": 39432,
+      "sha256": "df3dd027fa545125878bebe85be1f8e72647dd13f065e555655ff4065f5a9ea1"
+    },
+    {
+      "path": "load_hourly/year=2024/month=04/part.parquet",
+      "rows": 38160,
+      "sha256": "a142abda75645bd8380c7b6c51cf9447463475f12727fd6aad1d0d09a0c2904e"
+    },
+    {
+      "path": "load_hourly/year=2024/month=05/part.parquet",
+      "rows": 39384,
+      "sha256": "5517ad45cb94a61084e6d2ee2d9766c0741d00ed4a2e1b03c6cbd1b814292955"
+    },
+    {
+      "path": "load_hourly/year=2024/month=06/part.parquet",
+      "rows": 38136,
+      "sha256": "761a2a7ce0ec17e7e33e949fae0643fdf30e80e28f91fe889a07af4cdddea9a0"
+    },
+    {
+      "path": "load_hourly/year=2024/month=07/part.parquet",
+      "rows": 39392,
+      "sha256": "692c112e756008e57d877a5131fab01f9e5d700d84ee526cad27ec8cc16ce521"
+    },
+    {
+      "path": "load_hourly/year=2024/month=08/part.parquet",
+      "rows": 39432,
+      "sha256": "b88a95ea1dabb985ce7ebaa51e7867c33c13110d64aa9e73350505a362b40a69"
+    },
+    {
+      "path": "load_hourly/year=2024/month=09/part.parquet",
+      "rows": 38160,
+      "sha256": "98945d0646dea281e1a29dc6a61f0f8031a1acc9403051cdd7f69ed79489e57d"
+    },
+    {
+      "path": "load_hourly/year=2024/month=10/part.parquet",
+      "rows": 39432,
+      "sha256": "e3b7c26d581efb337eb6ad2f8762ddfc61298998326fa77067188a1f86c43349"
+    },
+    {
+      "path": "load_hourly/year=2024/month=11/part.parquet",
+      "rows": 38159,
+      "sha256": "c1fe1791be23f216793189be1492f80b7a9fa247e419935f160f39633d6e8b59"
+    },
+    {
+      "path": "load_hourly/year=2024/month=12/part.parquet",
+      "rows": 39432,
+      "sha256": "44ce838d90276d0b0947f540fbb87392139dcbc978c721a3c9a7717801bf5408"
+    },
+    {
+      "path": "load_hourly/year=2025/month=01/part.parquet",
+      "rows": 39432,
+      "sha256": "94cf14b1a8286ea2bd8ad37b0f241c97f522b1e970f7cb05143498c83fc7ef9e"
+    },
+    {
+      "path": "load_hourly/year=2025/month=02/part.parquet",
+      "rows": 35615,
+      "sha256": "7a2205727915e917af73ed96f697816936e240f18653bddf4e46d76a26c3b7a2"
+    },
+    {
+      "path": "load_hourly/year=2025/month=03/part.parquet",
+      "rows": 39432,
+      "sha256": "8d880377f4606d24aaede54f272859a3a11a83d9398b89e3e41db295c6f605af"
+    },
+    {
+      "path": "load_hourly/year=2025/month=04/part.parquet",
+      "rows": 38160,
+      "sha256": "f8390495a2afff3ffd99887d738a453acc2c8b2b71bc781e4e07e3d0fc09141a"
+    },
+    {
+      "path": "load_hourly/year=2025/month=05/part.parquet",
+      "rows": 39432,
+      "sha256": "eee1c4a6fb4757a6db1625ab71f0d47c4ec2037af5b70f14267a2aecc543fc5e"
+    },
+    {
+      "path": "load_hourly/year=2025/month=06/part.parquet",
+      "rows": 38160,
+      "sha256": "9941c2d9a5ee735c8b2506def39ec13dad19ef0a7f14c2d8acbb5898b240c149"
+    },
+    {
+      "path": "load_hourly/year=2025/month=07/part.parquet",
+      "rows": 39429,
+      "sha256": "576800848a04cea25d41e03fba3093c4f3a2e0de95733ff855be1b5d08da002f"
+    },
+    {
+      "path": "load_hourly/year=2025/month=08/part.parquet",
+      "rows": 39408,
+      "sha256": "7460ad0b8ae6a65d7e06eccf2e165fa1ea0c9fbe41db8fdb6333905e62b125ae"
+    },
+    {
+      "path": "load_hourly/year=2025/month=09/part.parquet",
+      "rows": 38159,
+      "sha256": "352dc78e41b98c93017eaede74489d797d18166f9babb93276ded74ee1876099"
+    },
+    {
+      "path": "load_hourly/year=2025/month=10/part.parquet",
+      "rows": 39432,
+      "sha256": "9ce6ca6c0b001ae8ea5126ef533dfe5b0fa795284a23e4c7a1b8fff653863c14"
+    },
+    {
+      "path": "load_hourly/year=2025/month=11/part.parquet",
+      "rows": 38156,
+      "sha256": "5c38caa1c86079a51d4ea08e2a82842623d0fc919e688b39912193266e2f34f0"
+    },
+    {
+      "path": "load_hourly/year=2025/month=12/part.parquet",
+      "rows": 39432,
+      "sha256": "b581baf70c2e3fbea4be2910349c56112d6ee898d69466e07c15948f7099da4e"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=01/part.parquet",
+      "rows": 39032,
+      "sha256": "2c2ed48761474528449cf8d343c545e1f76dbfa0786f92a5393988cc1e5a81f7"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=02/part.parquet",
+      "rows": 35211,
+      "sha256": "1c873713ff265fa110182b8f7e9118da8fbe4a44b77a897701e9eec0f0df1c03"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=03/part.parquet",
+      "rows": 38962,
+      "sha256": "9b1cf6796a8ba9bd9e2a5fecf765c0d98f231e405c81b09342c774c48e70a630"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=04/part.parquet",
+      "rows": 37576,
+      "sha256": "4a95b050ee29563c9621edae1263fc01a82bf5d52b73bb25db475dec1a766bb7"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=05/part.parquet",
+      "rows": 38821,
+      "sha256": "3cc8e0a6516a0aae1257252542eac9373f7c71911283851d0c1a3847e341df50"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=06/part.parquet",
+      "rows": 37671,
+      "sha256": "7e1ae8bddddc9905b021a2f04ff3baa28b56646586e8330e5b04d1c3917e0913"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=07/part.parquet",
+      "rows": 38961,
+      "sha256": "9929eb418e0ccaf585e5904cfd622d5a01ed0b06a8286988dfe8690fb0478ada"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=08/part.parquet",
+      "rows": 38859,
+      "sha256": "1577418177ee765544252cd8b4a02e545f85c21e9ae1d5b6e302d11e31a908f3"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=09/part.parquet",
+      "rows": 37705,
+      "sha256": "cc1c3f004b7019d5e740d1485c95f5042b55acc93e7a20282cf150dfbcfffd56"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=10/part.parquet",
+      "rows": 38967,
+      "sha256": "39efa0cd849817c97fd3fef16f01387c492f8ab0e773fa947c7fa220b3ca681b"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=11/part.parquet",
+      "rows": 37564,
+      "sha256": "124f982f4fb698293732046a89ae4ed66753d09c1a2084bbea2853875b1fdaa5"
+    },
+    {
+      "path": "weather_hourly/year=2018/month=12/part.parquet",
+      "rows": 38929,
+      "sha256": "8189d72ddad49d8048553c81c12cde8d06ca81891e7100e18584be0ebe5b5df5"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=01/part.parquet",
+      "rows": 38695,
+      "sha256": "61313da427ac62f873c1f702cc81d03aef4c2378eb92d879a1220a16036b6ce3"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=02/part.parquet",
+      "rows": 34952,
+      "sha256": "6ddaa7cf88309d595c9ef812a1c40bbfd990db6639690bd2d1ddcf7bb818b2ae"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=03/part.parquet",
+      "rows": 38662,
+      "sha256": "a22f61a36e4a5b3693b0bce3ca1e393c55b1d5e7e38c1e65fd5206248c806f8b"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=04/part.parquet",
+      "rows": 37440,
+      "sha256": "a89fd3b90e0d54c4007e3628dd33a85edb4988856179c4bf1f1e8dc75adef4f2"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=05/part.parquet",
+      "rows": 38713,
+      "sha256": "ea526acae91e99c18a4af42be7bff8bc4160aa00068027e4b93aed7c4b777e42"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=06/part.parquet",
+      "rows": 37791,
+      "sha256": "b9a41a1ded0dfbcf9dd2daf92a57cde8b03a47783d68fd7036b8ffc15ed1aad1"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=07/part.parquet",
+      "rows": 39021,
+      "sha256": "c24513d495268f63acc9d622889e89b029fb8104e1f47ad1c8271c6c16fdb4f2"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=08/part.parquet",
+      "rows": 39009,
+      "sha256": "4e66d043438c3dfef89fee2a4ae002729a000542c8ea48d4e5caefb0f0aabbf7"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=09/part.parquet",
+      "rows": 37627,
+      "sha256": "229361b893e998bba1bd0c32e3948255a3dbd0e8b82574972eb76c792a03a218"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=10/part.parquet",
+      "rows": 38995,
+      "sha256": "76e08ea5564c2ff9f265b6dc6cc3f3d66eae0ff8bb5fceb07e17e0609989dd32"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=11/part.parquet",
+      "rows": 37740,
+      "sha256": "ffcd1308fb5be3e84e1e7fe434a16fb3357634895f08a010005f0f3ef9087830"
+    },
+    {
+      "path": "weather_hourly/year=2019/month=12/part.parquet",
+      "rows": 38997,
+      "sha256": "dde57d06a8f8bed4df2e8c6976c2a92eb30ab4527992ec4fffedc1ccc40e44b8"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=01/part.parquet",
+      "rows": 38961,
+      "sha256": "47a260fbcb325d1b5fccf8f5458083accf75c3c4c275bb04b4a5f72d65fbcb02"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=02/part.parquet",
+      "rows": 36133,
+      "sha256": "8dd139623f87833e2966a408fe3ea45359f8f57dbb343c8fc87ae495e682aa73"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=03/part.parquet",
+      "rows": 38982,
+      "sha256": "1ec5e117a1e1e6ff91beff1d9558a8a6df9dc41479695192e1f9f5e36fdad7de"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=04/part.parquet",
+      "rows": 37632,
+      "sha256": "c61bfacf1f82b156d6762ad2c4dd434681b5f9c9aab6da1672792777d46adfd8"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=05/part.parquet",
+      "rows": 38965,
+      "sha256": "3a4dfa440f3ab4997b48c18c0a134e75c91d1d1ac978cd966ae32006e7ac7d67"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=06/part.parquet",
+      "rows": 37729,
+      "sha256": "fb74e510aaa9f88370cd6f5039f3fa3d9e6c7d9a91bbe7284464b9aae79ad4bc"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=07/part.parquet",
+      "rows": 38964,
+      "sha256": "4359c9cb977c1bd5a7e5f9806235dd21abbcdfc74eb19dc6a01599538c0c8634"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=08/part.parquet",
+      "rows": 38968,
+      "sha256": "e7bb0fdc6b871fb8e322dee0125fd0017f3bf7e2d29ee9159818698f3c48c96d"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=09/part.parquet",
+      "rows": 37666,
+      "sha256": "15f76e3a536883f6e9a49c37efc28c155cfde119b7ccb0e9ddf6e2cedd6b317c"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=10/part.parquet",
+      "rows": 38880,
+      "sha256": "587f15319f859181cbc47680e1c9cd039ebeb792b395fc2d15d128fd1b1f3bc0"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=11/part.parquet",
+      "rows": 37692,
+      "sha256": "cb5267bd70cc10729bfe589b4f18a19cb2865b5b12f37860895cb10406fd38c5"
+    },
+    {
+      "path": "weather_hourly/year=2020/month=12/part.parquet",
+      "rows": 38963,
+      "sha256": "04cb3955bc4674e8b402d3d452c1b7f12267a0931aaf53b3d05c1ad2ab912127"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=01/part.parquet",
+      "rows": 39020,
+      "sha256": "7c0a8ad64d5bf7a10e2d6cb7bb7a977adde70570839776f3fb7f1afa7e12bb53"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=02/part.parquet",
+      "rows": 35238,
+      "sha256": "aacf32a9712ed5fbb62d6ce735592b5c3f91137145f36269a1a910f53ab3025f"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=03/part.parquet",
+      "rows": 38942,
+      "sha256": "6fa37bb64b0ba27e8c6a7c79b94c9575910ed39af8ad14ac5615a23a25d3bb4f"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=04/part.parquet",
+      "rows": 37798,
+      "sha256": "65b0e1068fe8681f4a4c1cb2ecce8a469b2f8ac89fd7d30657e1b01cadff30d9"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=05/part.parquet",
+      "rows": 38954,
+      "sha256": "bef47f3c19165ebcfe5a8448eb4a0f26a5261b8c12862b2e5f25d0fb501c4f9c"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=06/part.parquet",
+      "rows": 37710,
+      "sha256": "245df029aa4d0408b1bb938d65840860955647c8aaa6e7dbdc4b909c256efff4"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=07/part.parquet",
+      "rows": 38966,
+      "sha256": "915798e8189c01f4d27980aadfd5c4a7dd74193f66e0fa4595ec5b86957d70e4"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=08/part.parquet",
+      "rows": 38987,
+      "sha256": "bbdc61068a123e5a41ff7df30740eb62a0f31ec5cc8a8236a7a894329980d5ff"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=09/part.parquet",
+      "rows": 37703,
+      "sha256": "3b80bba8163b8c231e797a6e832064d3261bb94b8a8b22811534c44fb8db6eb6"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=10/part.parquet",
+      "rows": 38928,
+      "sha256": "67f70a21d4a71566dcb7821626d0b9fc8a894f82058f32bc9247e6120194d447"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=11/part.parquet",
+      "rows": 37738,
+      "sha256": "193a28f77b7ae64311a7f9ace07d534bd37e56e9b448359940bad34a4d1aa324"
+    },
+    {
+      "path": "weather_hourly/year=2021/month=12/part.parquet",
+      "rows": 38910,
+      "sha256": "7d56d14d32c60150908820685c5b1c45ef7b12a3fbcba5a38cdcb1c7d3c4c4b8"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=01/part.parquet",
+      "rows": 38912,
+      "sha256": "31a991a5569fcce90d267eb72d75fb4fe9db4dad8fe092c9b844556d12a776a8"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=02/part.parquet",
+      "rows": 35240,
+      "sha256": "110c6e7a5cab70abcf15f52497b945cfea9774bf9a82933c9f236d7c713d9377"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=03/part.parquet",
+      "rows": 39013,
+      "sha256": "c3928ad89ec887ba6319f645f1fadf87296cdfd9e367a07d6d36926abe8e3803"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=04/part.parquet",
+      "rows": 37639,
+      "sha256": "4d45fa39f9c28ace32745982d87889c76fe25a3e032804f2eb0a90e5d926c688"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=05/part.parquet",
+      "rows": 38945,
+      "sha256": "7818e46f2da38d1d21a6d889f8bbbdc44c99604e9f9f8bad2586eb2b90c6a766"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=06/part.parquet",
+      "rows": 37642,
+      "sha256": "bb4cea7b11e6485333009d63c0d21f2b1b6f992b55b412585817c85d2b4dfdf5"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=07/part.parquet",
+      "rows": 38814,
+      "sha256": "46555d68506a5a5a5c8e8e1c205cadffd35500e380f868c1f08808d1b2b24afe"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=08/part.parquet",
+      "rows": 39341,
+      "sha256": "f4e6dfa5b11c186204736f9bb0ed56e54b08137690c4dea1bfd54429b8275848"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=09/part.parquet",
+      "rows": 38069,
+      "sha256": "a2f59e0367c79655fb278fc0cb9da47025e962489e5dd0c60babde6d210015fa"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=10/part.parquet",
+      "rows": 39237,
+      "sha256": "b3f424133fc33e170dec6225c1798584b87378e4b688626e3f19428eea9838cf"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=11/part.parquet",
+      "rows": 38009,
+      "sha256": "aafc1d5b9d1551f96bcea9e9a45dbde00a242de992afb09e02dc57bcdff235b1"
+    },
+    {
+      "path": "weather_hourly/year=2022/month=12/part.parquet",
+      "rows": 39363,
+      "sha256": "3780d43f7e9a33c60bb90e286948a4e70cbc3b35c0e1f3fcdde24e28117a1272"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=01/part.parquet",
+      "rows": 39388,
+      "sha256": "cd3dd349e605df4023c03dc04fe22f0f26b9365c2c126f2f193797583a65a20e"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=02/part.parquet",
+      "rows": 35585,
+      "sha256": "d5546aa51ed0be5c29c8386e3d499ac25761844901e754544f06e244ba649852"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=03/part.parquet",
+      "rows": 39089,
+      "sha256": "94a635f4eeae3f6838c7d7f04c23f4934daf08b778d995d613b9fefade1d05a6"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=04/part.parquet",
+      "rows": 38129,
+      "sha256": "ee2118282a8798fb5d3df7be9e43653e2d845f9d3bb499c5f29b8285db16eb76"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=05/part.parquet",
+      "rows": 39370,
+      "sha256": "6903457f6e4157c9b57ac22e116ba83244b7f34d08d2e95b28226613633d3ddd"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=06/part.parquet",
+      "rows": 38070,
+      "sha256": "07e488842dbe6591d20e33c0a530f3ea2ea06b413fddeafd310ad3c1f4d74389"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=07/part.parquet",
+      "rows": 39081,
+      "sha256": "379a76102bb6eadf862c9ab227caea5bbfcf4a7d6d743a7bb2260ad0c9310aef"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=08/part.parquet",
+      "rows": 38974,
+      "sha256": "14b0bff02f9659d24b73fdedc5291096b4cfab5c0d43f43ffdd61240d63bf8cd"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=09/part.parquet",
+      "rows": 37834,
+      "sha256": "bbb87c1a2c1c67f39b00b5111f2a5661d6dd878aabb9860ebd23eb1c53877764"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=10/part.parquet",
+      "rows": 39339,
+      "sha256": "68b1ad491f4c006f7ff8f91a4fece22281c14a699ccf893c73378fb9f2f82ba3"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=11/part.parquet",
+      "rows": 38094,
+      "sha256": "7bf9fb9c2836523713a278ea23efe864fd0d4e77a58bfe762b83958a27079ec2"
+    },
+    {
+      "path": "weather_hourly/year=2023/month=12/part.parquet",
+      "rows": 39372,
+      "sha256": "f295dff012d2b223f7ce3e84358130e62d038f7e67e44e157febc516ef7441d8"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=01/part.parquet",
+      "rows": 39377,
+      "sha256": "2a137874a1ec76ca031ee91d6b9cb18433079f8b777056a2b83f75fabe3a0ed6"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=02/part.parquet",
+      "rows": 36836,
+      "sha256": "ff0bbb570abead1dc554344b2ba696866dc774bde4757b5cfdf8f9aa47cbb37e"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=03/part.parquet",
+      "rows": 39322,
+      "sha256": "3334fa2a177c63e76b73aefa723b33aadac1862755628ef7b00b5c507df6e079"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=04/part.parquet",
+      "rows": 38020,
+      "sha256": "a2a339671be34f7976a6f5377545fac8c2c8a947551f509665c6ec650ae600a3"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=05/part.parquet",
+      "rows": 39332,
+      "sha256": "520ff6513d96a3a09fa0922da9359dd9dd4f83ab9bcd88ef9b536388669b18fc"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=06/part.parquet",
+      "rows": 38074,
+      "sha256": "aee932992ed3c4eafee812d8ba0ea4e0ff6af35850eccd38e6e836f4dc3b7a26"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=07/part.parquet",
+      "rows": 39356,
+      "sha256": "a6ea6f67a08dfb72a57d97af4ee6c1bbbdb9b0b77b8c3fa024bec884196b6d83"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=08/part.parquet",
+      "rows": 39282,
+      "sha256": "1356c9a5b942eaad9ff0c33c82e4af47690a38990d2d54c452ec7c7141799a3e"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=09/part.parquet",
+      "rows": 38060,
+      "sha256": "807239db11378f94dcf6edbd87e418d944a53b74aac4c2f077bfa3c97bf47c30"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=10/part.parquet",
+      "rows": 39345,
+      "sha256": "0f5b41abe1f0902b72803e14067d7089ef652ae90ce57fb8601dda6416d752b3"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=11/part.parquet",
+      "rows": 37930,
+      "sha256": "b523d9fb1395a00d864d07f7290447048d1cec8782f017f467f0dd58e608a767"
+    },
+    {
+      "path": "weather_hourly/year=2024/month=12/part.parquet",
+      "rows": 39251,
+      "sha256": "983971ddbd74695abd4d198800aa01c82064d49ef22129e648792b947cfa4710"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=01/part.parquet",
+      "rows": 39304,
+      "sha256": "2a6e4b4aba9fc6fe0f695173a1afe27b39b5f04d11bccea1b0cf7a3411678390"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=02/part.parquet",
+      "rows": 35574,
+      "sha256": "c68999b6168e9593646344cd2f9b11f4f30b362eb8e652a72dee6055bad9ae75"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=03/part.parquet",
+      "rows": 39289,
+      "sha256": "7017627377e5e3c5d45203ab39e6fd87b72f3a620ba34c1581b93396270802d7"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=04/part.parquet",
+      "rows": 37678,
+      "sha256": "655ab8f71d315d1b3602ae1a0ef08cd426ec420022738f7ce1d721a648477d63"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=05/part.parquet",
+      "rows": 38566,
+      "sha256": "f7b884f3c06774edb0f9a9537cb80dfa6448f31c9df1437c109cb5e0aef20b04"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=06/part.parquet",
+      "rows": 37707,
+      "sha256": "ca5cf1836a3d0604e6ccb08de56855725e81aaf0016cf26fe97f6f86424bc969"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=07/part.parquet",
+      "rows": 39037,
+      "sha256": "f6a91c9491fe662a5e8ae7db96a31e9bfdd4f10edbae3979ae68c9eaeb9f4349"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=08/part.parquet",
+      "rows": 39293,
+      "sha256": "93eab3e7366baffb799fe0addd021ffbb844ce30a79a9b0a3a0a45fac3095274"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=09/part.parquet",
+      "rows": 37559,
+      "sha256": "fc49d0cbe53fd78248ce145b9b996870abfde27dcc04b6335826c378b1db463a"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=10/part.parquet",
+      "rows": 39242,
+      "sha256": "f1996c8d36a25a3493b3eeee3f22fc861fafb455181891447e0641a528ef25d1"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=11/part.parquet",
+      "rows": 37876,
+      "sha256": "32784846b7d294e3a4b94eb816b3a234afa168af0680ef1b8c62d0903586e703"
+    },
+    {
+      "path": "weather_hourly/year=2025/month=12/part.parquet",
+      "rows": 39154,
+      "sha256": "77b3677171a5dcc2128678db7de1db43563d9d3f88c17d4807d3ae985ddc3081"
+    }
+  ],
+  "format_version": 1,
+  "source_catalog": {
+    "load_hourly": {
+      "provider": "EIA-930",
+      "url": "https://api.eia.gov/v2/electricity/rto/region-data/data/"
+    },
+    "weather_hourly": {
+      "provider": "ASOS / Iowa Environmental Mesonet",
+      "url": "https://mesonet.agron.iastate.edu/"
+    }
+  },
+  "surge_grid_version": "0.2.0",
+  "validation": {
+    "allow_incomplete": false,
+    "expected_load_bas": [
+      "PJM",
+      "CISO",
+      "ERCO",
+      "MISO",
+      "NYIS",
+      "ISNE",
+      "SWPP"
+    ],
+    "max_input_age_hours": null,
+    "minimum_input_rows_per_ba": 2049,
+    "require_all_demand_bas": false
+  }
+}

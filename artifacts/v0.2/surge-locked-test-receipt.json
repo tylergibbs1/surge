@@ -1,0 +1,102 @@
+{
+  "checkpoint_inventory_sha256": "bff90d4fdeb154a4ab2ea8fae79e7fc03d00283fa16b3b423db4f89e1d19dd2d",
+  "experiment": "locked-once-v0.2",
+  "experiment_protocol_sha256": "85cb0f805650183f4b6b11bcecb41026c44cefcdceb2a4da78556b85e2fd3559",
+  "model_artifact_hash_algorithm": "sha256-tree-v1",
+  "model_artifact_sha256": "c6fddf8a035bb72a3cda926a697b4f9dfec0811b079c796e7e953040685df27a",
+  "policy_version": "surge-v0.2-overfit-gate-v1",
+  "promotion_marker": "surge-promotion.json",
+  "promotion_marker_sha256": "72ff9ba0591ac1d484ab59790f596939875675791e7d0d0145fa2de554da7333",
+  "registry_reservation": "/workspace/surge-v02/locked-test-registry/85cb0f805650183f4b6b11bcecb41026c44cefcdceb2a4da78556b85e2fd3559.json",
+  "schema_version": 1,
+  "selection_artifact": "v0.2-h100-selection.json",
+  "selection_artifact_sha256": "421f514539ab91348de714095eba7fc8a9f6b1f6fba5ec28189fdc3585e08b05",
+  "selection_decision_sha256": "cf649609edd213efe572b32e029963da7709466fc3a492fabb9c8a8f98b29d02",
+  "started_at_utc": "2026-08-02T04:03:55.659718+00:00",
+  "status": "started",
+  "test_opened": true,
+  "training_identity": {
+    "bas": [
+      "PJM",
+      "CISO",
+      "ERCO",
+      "MISO",
+      "NYIS",
+      "ISNE",
+      "SWPP"
+    ],
+    "base_model": "amazon/chronos-2",
+    "base_revision": "29ec3766d36d6f73f0696f85560a422f50e8498c",
+    "code_revision": "e6022e494ee79bb10f228bc2fead0d25b905fdd0",
+    "data_snapshot_sha256": "77d80d4031e2391808103ef29bb182b3ee2469cec1c24ae00569d217bd48a4c0",
+    "feature_spec_sha256": "84a740bfe11062e6db03ac8ea61fe727f0c587abed4de89eff3e5c295054cdeb",
+    "feature_spec_version": "load-v2-core",
+    "runtime": {
+      "chronos_fit": {
+        "bf16": true,
+        "data_seed": 42,
+        "disable_data_parallel": true,
+        "full_determinism": true,
+        "seed": 42,
+        "tf32": true
+      },
+      "system": {
+        "accelerator_count": 1,
+        "accelerators": [
+          {
+            "capability": [
+              9,
+              0
+            ],
+            "index": 0,
+            "name": "NVIDIA H100 80GB HBM3",
+            "total_memory_bytes": 84929216512
+          }
+        ],
+        "cublas_workspace_config": ":4096:8",
+        "cuda_available": true,
+        "cuda_matmul_allow_tf32": true,
+        "cudnn_allow_tf32": true,
+        "cudnn_benchmark": false,
+        "cudnn_deterministic": true,
+        "default_dtype": "torch.float32",
+        "deterministic_algorithms": true,
+        "float32_matmul_precision": "high",
+        "platform_machine": "x86_64",
+        "platform_release": "6.8.0-52-generic",
+        "platform_system": "Linux",
+        "python_executable_name": "python",
+        "python_implementation": "CPython",
+        "python_version": "3.12.3",
+        "torch_cuda_version": "12.8",
+        "torch_cudnn_version": 91002
+      }
+    },
+    "training_config": {
+      "batch_size": 32,
+      "checkpoint_selection_disjoint_from_promotion": true,
+      "complete_target_origins_only": true,
+      "context": 2048,
+      "diagnostic_batch_size": 16,
+      "diagnostic_origins": 90,
+      "diagnostic_step": 24,
+      "horizon": 24,
+      "learning_rate": 1e-05,
+      "mode": "lora",
+      "num_steps": 2000,
+      "seed": 42,
+      "shared_origin_schedule": true,
+      "with_generation": false
+    },
+    "versions": {
+      "chronos-forecasting": "2.3.1",
+      "holidays": "0.101",
+      "numpy": "2.1.2",
+      "peft": "0.20.0",
+      "polars": "1.43.2",
+      "pyarrow": "25.0.0",
+      "torch": "2.8.0+cu128",
+      "transformers": "4.57.6"
+    }
+  }
+}

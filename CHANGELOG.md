@@ -24,6 +24,9 @@ All notable changes to Surge Grid are documented here. The project follows
   the promoted model, code, data snapshot, feature contract, and RTO identities.
 - A stable experiment-protocol reservation key plus Python, platform,
   CUDA/cuDNN, H100, determinism, precision, and TF32 runtime provenance.
+- A compact checksummed H100 evidence bundle retaining both frozen candidates,
+  their overfitting audits, the selected winner, and the consumed locked-test
+  incident without publishing model weights or credentials.
 
 ### Changed
 
@@ -39,12 +42,18 @@ All notable changes to Surge Grid are documented here. The project follows
   added scheduled EIA load and seven-RTO ASOS weather refreshes.
 - Withdrew the unsupported “beats operators on 6 of 7 RTOs” and always-on
   claims pending vintage replay and live-forward evidence.
+- Kept the selected 2,000-step adapter as model-development evidence only after
+  the single 2025 run failed closed on incomplete NYIS target windows; no
+  locked-test metric is claimed and the pinned upstream base remains default.
 
 ### Security and reliability
 
 - Defined freshness from source/data cutoffs rather than request timestamps.
 - Required complete, validated multi-BA publication and explicit rollback
   evidence for release.
+- Made catchable post-reservation evaluator errors terminally record a bounded,
+  sanitized `failed` state in both one-shot receipt and registry while still
+  rejecting every retry.
 
 ## [0.0.1] - 2026-04-20
 

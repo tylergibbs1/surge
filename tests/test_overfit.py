@@ -20,6 +20,7 @@ from experiments.overfit import (
     TRUST_RTO_BAS,
     build_overfit_audit,
     complete_locked_test_run,
+    fail_locked_test_run,
     rejected_overfit_audit,
     reserve_locked_test_run,
     revision_for_model_load,
@@ -1066,6 +1067,80 @@ def test_locked_test_receipt_is_atomic_one_shot_and_records_result(
     assert len(completed["result_sha256"]) == 64
     registry_receipt = json.loads((registry / f"{'b' * 64}.json").read_text())
     assert registry_receipt["status"] == "completed"
+
+
+def test_locked_test_failure_is_sanitized_terminal_and_mirrored(
+    tmp_path: Path,
+) -> None:
+    marker_path = tmp_path / "surge-promotion.json"
+    marker_path.write_text("{}", encoding="utf-8")
+    registry = tmp_path / "authoritative-registry"
+    identity = {
+        "base_revision": "a" * 40,
+        "code_revision": "b" * 40,
+        "data_snapshot_sha256": "c" * 64,
+        "bas": list(TRUST_RTO_BAS),
+    }
+    receipt_path = reserve_locked_test_run(
+        tmp_path / "v0.2-h100-selection.json",
+        experiment="v0.2-locked-test-failure",
+        training_identity=identity,
+        selection_sha256="f" * 64,
+        selection_decision_sha256="a" * 64,
+        experiment_protocol_sha256="b" * 64,
+        promotion_path=marker_path,
+        marker_sha256="d" * 64,
+        checkpoint_inventory_sha256="e" * 64,
+        model_artifact_sha256="c" * 64,
+        registry_root=registry,
+    )
+
+    failure = ValueError(
+        "NYIS origins lack finite targets\n"
+        "token=do-not-store authorization: Bearer do-not-store-either"
+    )
+    fail_locked_test_run(receipt_path, failure)
+
+    failed = json.loads(receipt_path.read_text(encoding="utf-8"))
+    registry_failed = json.loads((registry / f"{'b' * 64}.json").read_text())
+    assert failed == registry_failed
+    assert failed["status"] == "failed"
+    assert failed["test_opened"] is True
+    assert datetime.fromisoformat(failed["failed_at_utc"]).tzinfo == UTC
+    assert failed["failure"] == {
+        "exception_type": "ValueError",
+        "message": (
+            "NYIS origins lack finite targets token=<redacted> "
+            "authorization: <redacted>"
+        ),
+    }
+    assert "do-not-store" not in json.dumps(failed["failure"])
+    encoded_failure = json.dumps(
+        failed["failure"],
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    assert failed["failure_sha256"] == hashlib.sha256(encoded_failure).hexdigest()
+    assert "result" not in failed
+
+    with pytest.raises(ValueError, match="not in the started state"):
+        complete_locked_test_run(receipt_path, {"mase": 0.73})
+    with pytest.raises(ValueError, match="not in the started state"):
+        fail_locked_test_run(receipt_path, RuntimeError("replacement failure"))
+    with pytest.raises(RuntimeError, match="already consumed"):
+        reserve_locked_test_run(
+            tmp_path / "v0.2-h100-selection.json",
+            experiment="forbidden-second-look-after-failure",
+            training_identity=identity,
+            selection_sha256="f" * 64,
+            selection_decision_sha256="a" * 64,
+            experiment_protocol_sha256="b" * 64,
+            promotion_path=marker_path,
+            marker_sha256="d" * 64,
+            checkpoint_inventory_sha256="e" * 64,
+            model_artifact_sha256="c" * 64,
+            registry_root=registry,
+        )
 
 
 def test_diagnostic_exception_artifact_is_explicitly_rejected() -> None:

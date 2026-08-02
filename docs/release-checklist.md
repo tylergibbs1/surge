@@ -3,6 +3,13 @@
 All required boxes must be checked with linked evidence before publishing
 `v0.2.0`. “Workflow green” is not evidence when a postcondition was not tested.
 
+The frozen H100 selection completed, but its one authorized 2025 evaluation
+was consumed by a target-completeness failure before metrics were produced.
+The evidence is retained under `artifacts/v0.2/`; no retry is permitted and no
+locked-test accuracy claim may be published. This does not change the v0.2
+serving choice: the pinned upstream base remains the default, while the selected
+adapter remains model-development evidence only.
+
 ## Evidence and documentation
 
 - [ ] Issue #1 has an acknowledgement and links to the methodology correction.

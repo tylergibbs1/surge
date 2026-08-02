@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-08-02T04:08:07Z",
+  "disposition": "consumed-failed-closed",
+  "test_opened": true,
+  "partial_model_inference_started": true,
+  "metrics_produced": false,
+  "rerun_performed": false,
+  "receipt_status": "started",
+  "receipt_sha256": "75dd606b5a6cf469b424d7c49761e0714c7bf4cb774f66908d5fba4b0f36028a",
+  "registry_reservation_sha256": "75dd606b5a6cf469b424d7c49761e0714c7bf4cb774f66908d5fba4b0f36028a",
+  "experiment_protocol_sha256": "85cb0f805650183f4b6b11bcecb41026c44cefcdceb2a4da78556b85e2fd3559",
+  "selection_artifact_sha256": "421f514539ab91348de714095eba7fc8a9f6b1f6fba5ec28189fdc3585e08b05",
+  "selection_decision_sha256": "cf649609edd213efe572b32e029963da7709466fc3a492fabb9c8a8f98b29d02",
+  "selected_candidate": "official-lora-2000",
+  "code_revision": "e6022e494ee79bb10f228bc2fead0d25b905fdd0",
+  "data_snapshot_sha256": "77d80d4031e2391808103ef29bb182b3ee2469cec1c24ae00569d217bd48a4c0",
+  "failure_phase": "rolling_eval_c2/bootstrap_target_completeness",
+  "exception_type": "ValueError",
+  "exception_message": "NYIS bootstrap requires all 24 target hours finite at every origin; incomplete origins=['2025-01-15T00:00:00.000000', '2025-01-16T00:00:00.000000']",
+  "incomplete_origins": [
+    "2025-01-15T00:00:00.000000",
+    "2025-01-16T00:00:00.000000"
+  ],
+  "root_cause": {
+    "affected_rto": "NYIS",
+    "calendar_grid_origin_count_per_rto": 365,
+    "finite_target_hours_per_incomplete_origin": 23,
+    "loader_valid_load_range_mw": "(0, 200000]",
+    "invalid_source_observations": [
+      {
+        "load_mw": 0.0,
+        "timestamp_utc": "2025-01-15T23:00:00Z"
+      },
+      {
+        "load_mw": 0.0,
+        "timestamp_utc": "2025-01-16T00:00:00Z"
+      }
+    ]
+  },
+  "process_exit_code": 1,
+  "note": "This post-incident sidecar records terminal stderr and binds it to the untouched consuming receipt. It does not mutate the receipt or authorize a second test look."
+}

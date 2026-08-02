@@ -116,7 +116,12 @@ It deliberately excludes outcomes, winner, timestamps, paths, and artifact
 hashes, so copying, regenerating, or retraining the declared experiment does
 not create another permitted look. A fully written started record is published
 with an atomic no-clobber link; the readable receipt is written the same way
-beside the frozen selection artifact.
+beside the frozen selection artifact. After reservation, a catchable runner
+exception atomically replaces each complete record with the same terminal
+`failed` state, UTC timestamp, and bounded sanitized exception type/message;
+it stores no traceback. An abrupt process loss can leave `started`. Both
+`failed` and `started` consume the one allowed look, and neither permits a
+retry or can be changed into `completed` by the runner.
 The locked test uses the promoted context, horizon, and generation-covariate
 configuration and the fixed full-partition daily-origin rule (`step=24`, no
 origin cap), 2,000 paired origin-block bootstrap resamples, seed 42, and

@@ -214,8 +214,12 @@ loading any 2025 row, the runner exclusively reserves the outcome-independent
 frozen experiment-protocol hash in
 `SURGE_LOCKED_TEST_REGISTRY` and creates `surge-locked-test-receipt.json` beside
 the selection artifact. Completion stores the metric payload and its hash in
-both records; a crash leaves a consuming `started` reservation, and any second
-attempt fails closed. The immutable result retains full-precision metrics;
+both records. A catchable exception is atomically mirrored as a terminal
+`failed` state with its UTC timestamp and sanitized exception summary; abrupt
+process loss leaves a consuming `started` reservation. All three states are
+consuming; terminal `completed` and `failed` states are immutable, and either
+non-completed state still rejects any second attempt.
+The immutable result retains full-precision metrics;
 rounding is applied only to terminal display. The promoted context,
 horizon, and generation setting are mandatory, with `step=24` and no origin
 cap, 2,000 paired origin-block resamples, seed 42, and per-horizon metrics, so

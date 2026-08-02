@@ -69,12 +69,38 @@ After the winner is frozen, one explicitly named `locked-once` run may open
 2025 for the **raw selected model**. It uses daily 24-hour origins, p50 point
 metrics, p10/p50/p90 probabilistic metrics, and 2,000 paired origin-block
 bootstrap resamples with seed 42. The atomic test receipt is created before any
-2025 row is loaded; a crash consumes the attempt. Test results may be reported
-with their `retrospective_final` limitation but cannot be used to choose a
-different candidate, alter the gate, or tune another model.
+2025 row is loaded. A catchable post-reservation exception is mirrored to the
+receipt and registry as a terminal sanitized `failed` record; abrupt process
+loss remains `started`. Either state consumes the attempt. Test results may be
+reported with their `retrospective_final` limitation but cannot be used to
+choose a different candidate, alter the gate, or tune another model.
 
 The rolling conformal harness remains a separate validation-only research
 lane. Its selected policy is not applied by `experiments.run_c2`, and this
 experiment makes no calibrated-2025 claim. A future calibrated locked test
 would require a separately frozen runner and a genuinely unopened outcome
 period; it may not reuse 2025 after the raw-model test has opened it.
+
+## Executed outcome
+
+Both frozen candidates passed every overfitting gate on the disjoint promotion
+cohort. The 2,000-step candidate won with selection score `0.9722636478503976`
+versus `0.9829746249582003` for the 1,000-step candidate. The selector and both
+candidate chains are retained under `artifacts/v0.2/`.
+
+The one authorized 2025 run opened on 2026-08-02 and failed closed before
+producing metrics. Two NYIS daily origins had only 23 of 24 finite target hours,
+which violated the frozen full-partition bootstrap rule. The started receipt
+and registry reservation remain consuming and byte-identical; they were not
+removed or used to justify a retry. There is therefore no v0.2 locked-test
+accuracy result, the adapter is not promoted as a tested serving default, and
+the pinned upstream base remains the serving default. See
+`artifacts/v0.2/README.md` and the checksum-bound incident sidecar for the exact
+evidence.
+
+Any future test must use a genuinely unopened period and a new frozen protocol.
+Before model inference, that protocol should derive one shared RTO cohort using
+only a predeclared target-availability/quality rule, hash the retained and
+excluded origins, enforce an attrition threshold, and terminate as
+`not-scoreable` without retry if the threshold is not met. That rule cannot be
+applied retroactively to the consumed v0.2 test.

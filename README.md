@@ -171,6 +171,11 @@ and the [release checklist](https://github.com/tylergibbs1/surge/blob/main/docs/
 v0.2 is an alpha research release. Its Vercel pointer publication and
 forward-scoring ledger contract cover PJM, CISO, ERCO, MISO, NYIS, ISNE, and
 SWPP. The repository does not yet publish a settled live-forward result set.
+The frozen adapter experiment is retained as
+[checksummed model-selection evidence](artifacts/v0.2/README.md), but its one
+authorized 2025 test failed closed on incomplete NYIS target windows before
+producing metrics. No locked-test accuracy result is claimed, and the adapter
+is not the tested serving default.
 The broader
 53-BA playground is useful for exploration and demonstration, but it is not a
 complete atomic release surface, a production control-plane, or an availability
