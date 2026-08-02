@@ -91,6 +91,12 @@ LOAD_V2_CORE = FeatureSpec(
     forbidden_future_covariates=OBSERVED_COVARIATES,
 )
 
+# Declared but NOT adopted. Measured on 2024 it made no detectable difference
+# (macro MAE 1252.4 -> 1257.4 MW, coverage unchanged); see
+# docs/calendar-clock-experiment.md. Kept because the defect is real and will
+# matter with shorter context, with fine-tuning on these features, or for any
+# consumer reading the flags directly -- but it is not an accuracy improvement.
+#
 # v3 changes exactly one thing: the calendar covariates come from the BA's own
 # wall clock. Over 2024 the UTC weekend flag was wrong for 772 CISO hours, 525
 # of them inside the local evening peak, and the holiday flag is misaligned the
