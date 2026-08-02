@@ -1,0 +1,95 @@
+{
+  "active_split": "v0.2",
+  "availability_mode": "retrospective_final",
+  "bas": [
+    "PJM",
+    "CISO",
+    "ERCO",
+    "MISO",
+    "NYIS",
+    "ISNE",
+    "SWPP"
+  ],
+  "baseline_params": {
+    "colsample_bytree": 0.9,
+    "learning_rate": 0.05,
+    "min_child_samples": 40,
+    "n_estimators": 800,
+    "num_leaves": 63,
+    "objective": "l1",
+    "subsample": 0.9,
+    "subsample_freq": 1,
+    "verbose": -1
+  },
+  "baseline_version": "surge-gbm-baseline-v1",
+  "code_revision": "01a94abf48d68487ece24d367548199aad7cc4cc",
+  "held_out_test_lane": "not-opened",
+  "macro": {
+    "blend": 2.7169,
+    "chronos2_zero_shot": 2.8784,
+    "gbm_baseline": 2.978,
+    "seasonal_naive_24h": 4.7893
+  },
+  "per_ba": {
+    "CISO": {
+      "blend": 2.5065,
+      "blend_weight_on_chronos": 0.64,
+      "chronos2_zero_shot": 2.5388,
+      "gbm_baseline": 2.9829,
+      "scored_points": 4392,
+      "seasonal_naive_24h": 4.8883
+    },
+    "ERCO": {
+      "blend": 2.6264,
+      "blend_weight_on_chronos": 0.46,
+      "chronos2_zero_shot": 2.7997,
+      "gbm_baseline": 2.9551,
+      "scored_points": 4392,
+      "seasonal_naive_24h": 3.7568
+    },
+    "ISNE": {
+      "blend": 4.2585,
+      "blend_weight_on_chronos": 0.59,
+      "chronos2_zero_shot": 4.5999,
+      "gbm_baseline": 4.5195,
+      "scored_points": 4392,
+      "seasonal_naive_24h": 6.4412
+    },
+    "MISO": {
+      "blend": 1.9042,
+      "blend_weight_on_chronos": 0.43,
+      "chronos2_zero_shot": 2.0556,
+      "gbm_baseline": 2.1167,
+      "scored_points": 4356,
+      "seasonal_naive_24h": 4.1345
+    },
+    "NYIS": {
+      "blend": 2.857,
+      "blend_weight_on_chronos": 0.34,
+      "chronos2_zero_shot": 2.9146,
+      "gbm_baseline": 3.0927,
+      "scored_points": 4387,
+      "seasonal_naive_24h": 5.0801
+    },
+    "PJM": {
+      "blend": 2.4954,
+      "blend_weight_on_chronos": 0.41000000000000003,
+      "chronos2_zero_shot": 2.7041,
+      "gbm_baseline": 2.6692,
+      "scored_points": 4392,
+      "seasonal_naive_24h": 4.92
+    },
+    "SWPP": {
+      "blend": 2.37,
+      "blend_weight_on_chronos": 0.45,
+      "chronos2_zero_shot": 2.5363,
+      "gbm_baseline": 2.5096,
+      "scored_points": 4389,
+      "seasonal_naive_24h": 4.304
+    }
+  },
+  "protocol": "open-baseline-and-blend-on-untouched-outer-half",
+  "reported_on": "untouched second half",
+  "schema_version": 1,
+  "weight_fitted_on": "first chronological half"
+}
