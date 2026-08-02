@@ -15,16 +15,20 @@ import experiments.overfit as overfit_module
 from experiments.eval_c2 import rolling_eval_c2
 from experiments.overfit import (
     FROZEN_DATA_SNAPSHOT_SHA256,
+    MAX_PRE_METRIC_ABORTS,
     POLICY_VERSION,
     RELEASE_BASE_MODEL_ID,
     RELEASE_BASE_REVISION,
     TRUST_RTO_BAS,
+    abort_locked_test_run,
     build_overfit_audit,
     complete_locked_test_run,
     fail_locked_test_run,
+    locked_test_abort_count,
     rejected_overfit_audit,
     reserve_locked_test_run,
     revision_for_model_load,
+    spend_locked_test_look,
     validate_promotion_inputs,
     validate_release_lineage,
     validate_reproducibility_runtime,
@@ -1021,7 +1025,8 @@ def test_locked_test_receipt_is_atomic_one_shot_and_records_result(
     )
     started = json.loads(receipt_path.read_text(encoding="utf-8"))
     assert started["status"] == "started"
-    assert started["test_opened"] is True
+    # Reserving is not looking; the look is spent explicitly, later.
+    assert started["test_opened"] is False
     assert started["model_artifact_hash_algorithm"] == "sha256-tree-v1"
     assert started["model_artifact_sha256"] == "c" * 64
 
@@ -1101,6 +1106,7 @@ def test_locked_test_failure_omits_message_and_is_terminally_mirrored(
         "postgresql://alice:p4ssword@example.test/db "
         "AWS_SECRET_ACCESS_KEY=do-not-store-either"
     )
+    spend_locked_test_look(receipt_path)
     fail_locked_test_run(receipt_path, failure)
 
     failed = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -1197,3 +1203,92 @@ def test_diagnostic_exception_artifact_is_explicitly_rejected() -> None:
     assert audit["rejection_reasons"] == [
         "diagnostics_completed: GPU evaluation failed"
     ]
+
+
+def _reserve(tmp_path: Path, registry: Path, *, protocol: str = "b" * 64) -> Path:
+    marker_path = tmp_path / "surge-promotion.json"
+    if not marker_path.exists():
+        marker_path.write_text("{}", encoding="utf-8")
+    return reserve_locked_test_run(
+        tmp_path / "v0.2-h100-selection.json",
+        experiment="v0.2-locked-test",
+        training_identity={
+            "base_revision": "a" * 40,
+            "code_revision": "b" * 40,
+            "data_snapshot_sha256": "c" * 64,
+            "bas": list(TRUST_RTO_BAS),
+        },
+        selection_sha256="f" * 64,
+        selection_decision_sha256="a" * 64,
+        experiment_protocol_sha256=protocol,
+        promotion_path=marker_path,
+        marker_sha256="d" * 64,
+        checkpoint_inventory_sha256="e" * 64,
+        model_artifact_sha256="c" * 64,
+        registry_root=registry,
+    )
+
+
+def test_a_pre_metric_abort_does_not_consume_the_look(tmp_path: Path) -> None:
+    """The failure mode that destroyed the v0.2 attempt must now be survivable."""
+    registry = tmp_path / "registry"
+    receipt_path = _reserve(tmp_path, registry)
+
+    survived = abort_locked_test_run(receipt_path, ValueError("incomplete targets"))
+
+    assert survived is True
+    assert not receipt_path.exists()
+    assert locked_test_abort_count(registry, "b" * 64) == 1
+    # The look survived, so a corrected attempt may reserve again.
+    retried = _reserve(tmp_path, registry)
+    assert json.loads(retried.read_text(encoding="utf-8"))["test_opened"] is False
+
+
+def test_an_abort_after_the_look_is_spent_still_consumes_it(tmp_path: Path) -> None:
+    registry = tmp_path / "registry"
+    receipt_path = _reserve(tmp_path, registry)
+    spend_locked_test_look(receipt_path)
+
+    survived = abort_locked_test_run(receipt_path, ValueError("too late"))
+
+    assert survived is False
+    record = json.loads(receipt_path.read_text(encoding="utf-8"))
+    assert record["test_opened"] is True
+    with pytest.raises(RuntimeError, match="already consumed"):
+        _reserve(tmp_path, registry)
+
+
+def test_aborts_are_capped_so_retrying_cannot_fish_for_a_draw(tmp_path: Path) -> None:
+    registry = tmp_path / "registry"
+    for _ in range(MAX_PRE_METRIC_ABORTS - 1):
+        receipt_path = _reserve(tmp_path, registry)
+        assert abort_locked_test_run(receipt_path, ValueError("again")) is True
+
+    receipt_path = _reserve(tmp_path, registry)
+    assert abort_locked_test_run(receipt_path, ValueError("final")) is False
+    assert json.loads(receipt_path.read_text(encoding="utf-8"))["status"] == "failed"
+    with pytest.raises(RuntimeError, match="already consumed"):
+        _reserve(tmp_path, registry)
+
+
+def test_every_abort_leaves_immutable_evidence(tmp_path: Path) -> None:
+    """A retried attempt can never be presented as a pristine first look."""
+    registry = tmp_path / "registry"
+    receipt_path = _reserve(tmp_path, registry)
+    abort_locked_test_run(receipt_path, ValueError("boom"))
+
+    logs = sorted((registry / "aborts").glob("*"))
+    assert len(logs) == 1
+    record = json.loads(logs[0].read_text(encoding="utf-8"))
+    assert record["disposition"] == "pre-metric-abort-look-not-spent"
+    assert record["experiment_protocol_sha256"] == "b" * 64
+    assert record["failure"]["exception_type"] == "ValueError"
+    assert "message" not in record["failure"]
+
+
+def test_the_look_cannot_be_spent_twice(tmp_path: Path) -> None:
+    registry = tmp_path / "registry"
+    receipt_path = _reserve(tmp_path, registry)
+    spend_locked_test_look(receipt_path)
+    with pytest.raises(ValueError, match="already spent"):
+        spend_locked_test_look(receipt_path)

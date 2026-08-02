@@ -63,13 +63,10 @@ def test_locked_receipt_gets_raw_metrics_before_display_rounding(
     assert display["eval_s"] == 9.88
 
 
-def test_main_records_and_reraises_post_reservation_failure(
-    monkeypatch, tmp_path: Path
-) -> None:
+def _reserve_for_failure(tmp_path: Path, registry: Path) -> Path:
     marker_path = tmp_path / "surge-promotion.json"
     marker_path.write_text("{}", encoding="utf-8")
-    registry = tmp_path / "authoritative-registry"
-    receipt_path = run_c2.reserve_locked_test_run(
+    return run_c2.reserve_locked_test_run(
         tmp_path / "v0.2-h100-selection.json",
         experiment="v0.2-locked-test-failure",
         training_identity={"bas": ["PJM"]},
@@ -83,6 +80,14 @@ def test_main_records_and_reraises_post_reservation_failure(
         registry_root=registry,
     )
 
+
+def test_main_reraises_a_pre_metric_failure_without_consuming_the_look(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """This is the exact failure that destroyed the v0.2 attempt."""
+    registry = tmp_path / "authoritative-registry"
+    receipt_path = _reserve_for_failure(tmp_path, registry)
+
     def fail_after_reservation(on_locked_test_reserved) -> None:
         on_locked_test_reserved(receipt_path)
         raise ValueError("incomplete locked target window")
@@ -92,10 +97,37 @@ def test_main_records_and_reraises_post_reservation_failure(
     with pytest.raises(ValueError, match="incomplete locked target window"):
         run_c2.main()
 
+    assert not receipt_path.exists()
+    assert not (registry / f"{'b' * 64}.json").exists()
+    aborts = sorted((registry / "aborts").glob("*"))
+    assert len(aborts) == 1
+    assert json.loads(aborts[0].read_text())["failure"] == {
+        "exception_type": "ValueError",
+        "message_omitted": True,
+    }
+
+
+def test_main_records_a_terminal_failure_once_the_look_is_spent(
+    monkeypatch, tmp_path: Path
+) -> None:
+    registry = tmp_path / "authoritative-registry"
+    receipt_path = _reserve_for_failure(tmp_path, registry)
+
+    def fail_after_spending(on_locked_test_reserved) -> None:
+        on_locked_test_reserved(receipt_path)
+        run_c2.spend_locked_test_look(receipt_path)
+        raise ValueError("crashed while scoring")
+
+    monkeypatch.setattr(run_c2, "_main", fail_after_spending)
+
+    with pytest.raises(ValueError, match="crashed while scoring"):
+        run_c2.main()
+
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     registry_receipt = json.loads((registry / f"{'b' * 64}.json").read_text())
     assert receipt == registry_receipt
     assert receipt["status"] == "failed"
+    assert receipt["test_opened"] is True
     assert receipt["failure"] == {
         "exception_type": "ValueError",
         "message_omitted": True,

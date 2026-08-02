@@ -20,9 +20,12 @@ Config keys:
     batch_size    int   16
 
 The locked test atomically creates ``surge-locked-test-receipt.json`` next to
-the promotion marker before any 2025 rows are loaded. A catchable exception
-after reservation records a terminal failure in both receipt and registry; an
-abrupt process loss leaves ``started``. Either state consumes the run.
+the promotion marker before any 2025 rows are loaded. Reserving is not looking:
+the look is spent explicitly, immediately before the first metric exists. A
+failure before that point reveals nothing about the locked lane, so it releases
+the reservation and records an immutable abort instead of destroying the
+experiment. Aborts are capped. Once the look is spent, any failure -- including
+an abrupt process loss, which leaves ``started`` -- consumes it.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from typing import Any
 from experiments.eval_c2 import rolling_eval_c2
 from experiments.features import load_multi_ba
 from experiments.overfit import (
+    abort_locked_test_run,
     complete_locked_test_run,
     configure_reproducible_runtime,
     fail_locked_test_run,
@@ -46,6 +50,7 @@ from experiments.overfit import (
     reproducibility_runtime_identity,
     reserve_locked_test_run,
     revision_for_model_load,
+    spend_locked_test_look,
     validate_h100_runtime,
     verify_code_checkout,
     verify_data_snapshot_manifest,
@@ -311,6 +316,14 @@ def _main(on_locked_test_reserved: Callable[[Path], None]) -> None:
         ):
             raise RuntimeError("promoted checkpoint changed while the model was loading")
 
+    if on == "test" and locked_test_receipt is not None:
+        # Everything that can fail without revealing anything about the locked
+        # lane has now happened. Spend the look here, immediately before the
+        # first metric exists, so an abort before this point costs nothing and
+        # no score can ever be computed while the receipt says the look is
+        # unspent.
+        spend_locked_test_look(locked_test_receipt)
+
     t0 = time.time()
     m = rolling_eval_c2(
         pipe,
@@ -427,7 +440,12 @@ def main() -> None:
     except BaseException as exc:
         if locked_test_receipt is not None:
             try:
-                fail_locked_test_run(locked_test_receipt, exc)
+                # A failure before any metric materialized reveals nothing about
+                # the locked lane, so it must not destroy the experiment. This
+                # returns False once the look has been spent, and then records a
+                # terminal failure exactly as before.
+                if not abort_locked_test_run(locked_test_receipt, exc):
+                    fail_locked_test_run(locked_test_receipt, exc)
             except Exception as recording_exc:
                 exc.add_note(
                     "locked-test failure recording also failed: "

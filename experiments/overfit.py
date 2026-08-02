@@ -34,6 +34,10 @@ from surge.features import (
 from surge.model_loader import artifact_sha256
 
 POLICY_VERSION = "surge-v0.2-overfit-gate-v1"
+#: How many pre-metric aborts a single frozen protocol may record before the
+#: look is consumed anyway. A cap is required: without one, "abort and retry"
+#: becomes an unbounded search for a favourable draw.
+MAX_PRE_METRIC_ABORTS = 3
 TRUST_RTO_BAS = ("PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP")
 RELEASE_BASE_MODEL_ID = "amazon/chronos-2"
 RELEASE_BASE_REVISION = "29ec3766d36d6f73f0696f85560a422f50e8498c"
@@ -1208,10 +1212,12 @@ def reserve_locked_test_run(
     registry.mkdir(parents=True, exist_ok=True)
     reservation_path = registry / f"{experiment_protocol_sha256}.json"
     receipt = {
-        "schema_version": 1,
+        "schema_version": 2,
         "policy_version": POLICY_VERSION,
         "status": "started",
-        "test_opened": True,
+        # Reserving is not looking. This flips only in spend_locked_test_look,
+        # immediately before the first metric value exists.
+        "test_opened": False,
         "started_at_utc": datetime.now(tz=UTC).isoformat(),
         "experiment": experiment,
         "selection_artifact": frozen_selection_path.name,
@@ -1260,6 +1266,98 @@ def complete_locked_test_run(receipt_path: Path, result: dict[str, Any]) -> None
             "result": result,
         },
     )
+
+
+def spend_locked_test_look(receipt_path: Path) -> None:
+    """Mark the single authorized look as spent, immediately before any metric exists.
+
+    This is the act that consumes the look. Reserving does not, because a run
+    that aborts before a statistic materializes has revealed nothing about the
+    locked lane -- in group-sequential terms it spends no alpha. Separating the
+    two is what stops an infrastructure failure from destroying an experiment,
+    which is exactly how the v0.2 attempt was lost.
+
+    Call this after the evaluation inputs are assembled and before the first
+    metric value is computed, so no code path can observe a score while the
+    receipt still says the look is unspent.
+    """
+    path = receipt_path.expanduser().resolve()
+    receipt, reservation_path = _locked_test_records(path)
+    if receipt.get("status") != "started":
+        raise ValueError("locked-test receipt is not in the started state")
+    if receipt.get("test_opened") is True:
+        raise ValueError("locked-test look was already spent")
+    spent = {
+        **receipt,
+        "test_opened": True,
+        "look_spent_at_utc": datetime.now(tz=UTC).isoformat(),
+    }
+    _replace_json_atomically(reservation_path, spent)
+    _replace_json_atomically(path, spent)
+
+
+def abort_locked_test_run(receipt_path: Path, exc: BaseException) -> bool:
+    """Record a pre-metric abort and release the reservation for one more attempt.
+
+    Returns ``True`` when the look survived. An abort is only survivable while
+    ``test_opened`` is false; once a metric has materialized the look is gone
+    whatever happens afterwards.
+
+    Aborts are capped and every one is appended to an immutable log, so a
+    retried attempt can never be presented as a pristine first look, and an
+    abort cannot be used to fish for a favourable draw.
+    """
+    path = receipt_path.expanduser().resolve()
+    receipt, reservation_path = _locked_test_records(path)
+    if receipt.get("status") != "started":
+        raise ValueError("locked-test receipt is not in the started state")
+    if receipt.get("test_opened") is True:
+        return False
+
+    failure = _locked_test_failure_metadata(exc)
+    prior = _locked_test_aborts(reservation_path)
+    record = {
+        "schema_version": 1,
+        "abort_index": len(prior) + 1,
+        "aborted_at_utc": datetime.now(tz=UTC).isoformat(),
+        "experiment_protocol_sha256": receipt.get("experiment_protocol_sha256"),
+        "reservation_sha256": _sha256_file(reservation_path),
+        "failure": failure,
+        "disposition": "pre-metric-abort-look-not-spent",
+    }
+    log_path = _locked_test_abort_log_path(reservation_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    _link_exclusive_json(log_path.with_name(f"{log_path.name}.{record['abort_index']}"), record)
+
+    if len(prior) + 1 >= MAX_PRE_METRIC_ABORTS:
+        # Out of retries. Consume the look rather than allow unbounded attempts.
+        fail_locked_test_run(receipt_path, exc)
+        return False
+
+    # Release both records so a corrected attempt may reserve again. The abort
+    # log is the durable evidence that this was not a first look.
+    reservation_path.unlink()
+    path.unlink()
+    return True
+
+
+def _locked_test_abort_log_path(reservation_path: Path) -> Path:
+    return reservation_path.parent / "aborts" / f"{reservation_path.stem}.abort.json"
+
+
+def _locked_test_aborts(reservation_path: Path) -> list[Path]:
+    log_path = _locked_test_abort_log_path(reservation_path)
+    if not log_path.parent.is_dir():
+        return []
+    return sorted(log_path.parent.glob(f"{log_path.name}.*"))
+
+
+def locked_test_abort_count(registry_root: Path, experiment_protocol_sha256: str) -> int:
+    """How many pre-metric aborts this protocol has already recorded."""
+    reservation = (
+        registry_root.expanduser().resolve() / f"{experiment_protocol_sha256}.json"
+    )
+    return len(_locked_test_aborts(reservation))
 
 
 def fail_locked_test_run(receipt_path: Path, exc: BaseException) -> None:
