@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from datetime import UTC, datetime
 
+import numpy as np
 import polars as pl
 
 from surge import store, vintage
@@ -120,7 +121,58 @@ def load(ba: str, start: str, end: str, *, force: bool = False) -> pl.DataFrame:
 # operator baseline overstates PJM and CISO forecast error by roughly a
 # quarter -- flattering Surge in any published comparison, which is exactly the
 # direction that must not go unnoticed.
+#
+# The offset is NOT a permanent property of the BA. CISO in particular has been
+# observed switching between hour-start and hour-end conventions across years,
+# so an offset validated on one window can be wrong on another. These values are
+# validated for 2024-2025. Anyone scoring a different window must re-measure
+# with ``measure_df_hour_offset`` rather than trusting this table.
 DF_HOUR_OFFSET: dict[str, int] = {"PJM": 1, "CISO": 1}
+DF_OFFSET_VALIDATED_WINDOW = ("2024-01-01", "2026-01-01")
+
+
+def measure_df_hour_offset(
+    demand: pl.DataFrame,
+    forecast: pl.DataFrame,
+    *,
+    candidates: tuple[int, ...] = (-2, -1, 0, 1, 2),
+) -> tuple[int, dict[int, float]]:
+    """Find the shift that best aligns a DF series to its own demand series.
+
+    Turns the alignment from an assumption into a measurement. Returns the best
+    offset and every candidate's MAPE, so a caller can see how sharp the
+    minimum is; a shallow minimum means the convention is ambiguous in that
+    window and the result should not be trusted.
+
+    The returned offset has exactly the meaning ``DF_HOUR_OFFSET`` has: hours to
+    ADD to the published timestamp to reach the hour the forecast describes. The
+    two must never disagree in sign -- a measurement that reads backwards from
+    the correction it validates is worse than no measurement.
+    """
+    joined = demand.join(forecast, on="ts", how="inner").drop_nulls().sort("ts")
+    actual = joined["D"].to_numpy().astype(float)
+    predicted = joined["DF"].to_numpy().astype(float)
+    if len(actual) < 24:
+        raise ValueError("need at least a day of overlapping hours to measure alignment")
+
+    scores: dict[int, float] = {}
+    for shift in candidates:
+        # DF at index i is claimed to describe demand at index i + shift.
+        if shift > 0:
+            left, right = actual[shift:], predicted[: len(predicted) - shift]
+        elif shift < 0:
+            left, right = actual[: len(actual) + shift], predicted[-shift:]
+        else:
+            left, right = actual, predicted
+        usable = np.isfinite(left) & np.isfinite(right) & (np.abs(left) > 0)
+        if not usable.any():
+            continue
+        scores[shift] = float(
+            100 * np.mean(np.abs(left[usable] - right[usable]) / np.abs(left[usable]))
+        )
+    if not scores:
+        raise ValueError("no candidate offset had usable overlapping hours")
+    return min(scores, key=lambda key: scores[key]), scores
 
 
 def forecast(ba: str, start: str, end: str, *, force: bool = False) -> pl.DataFrame:

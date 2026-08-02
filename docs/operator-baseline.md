@@ -46,6 +46,35 @@ error, so the correction travels with the data.
 Raw responses are archived by `surge.vintage` before any reshaping, so the
 alignment can be re-derived from what EIA actually served.
 
+## The offset is a measurement, not a constant
+
+CISO has been observed switching between hour-start and hour-end conventions
+between years, so an offset validated on one window can be wrong on another.
+`DF_HOUR_OFFSET` is therefore scoped: it is validated for 2024-2025 only, and
+`DF_OFFSET_VALIDATED_WINDOW` records that. Anyone scoring a different window
+must re-measure with `surge.scrapers.eia.measure_df_hour_offset`, which returns
+every candidate's error so the sharpness of the minimum is visible. A shallow
+minimum means the convention is ambiguous in that window and the comparison
+should not be published.
+
+The measured offset and the applied offset share one sign convention -- hours to
+add to the published timestamp -- and a test pins them together. A measurement
+that read backwards from the correction it validates would be worse than no
+measurement at all.
+
+## `DF` is not comparable across balancing authorities
+
+EIA's form instructions ask each BA to report "the day-ahead demand forecast
+generated in the normal course of business", with **no specified issuance hour
+and no specified lead time**, and EIA never imputes or adjusts the column. ISO-NE
+publishes a same-morning product for the next six days; another BA's `DF` may be
+made at a different hour with a different information set.
+
+So `DF` is a valid benchmark for one BA against itself over time, and a trap for
+one BA against another. A scoreboard must never present a cross-BA operator
+column as a single comparable metric, and any Surge-versus-operator comparison
+must state the operator's assumed issuance time or mark itself indicative-only.
+
 ## Before publishing any comparison
 
 - Declare the operator's issuance time and information cutoff, or mark the
