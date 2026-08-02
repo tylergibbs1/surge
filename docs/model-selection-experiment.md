@@ -70,8 +70,10 @@ After the winner is frozen, one explicitly named `locked-once` run may open
 metrics, p10/p50/p90 probabilistic metrics, and 2,000 paired origin-block
 bootstrap resamples with seed 42. The atomic test receipt is created before any
 2025 row is loaded. A catchable post-reservation exception is mirrored to the
-receipt and registry as a terminal sanitized `failed` record; abrupt process
-loss remains `started`. Either state consumes the attempt. Test results may be
+receipt and registry as a terminal `failed` record containing only its bounded
+exception type, never arbitrary message text or a traceback. A lagging receipt
+is reconciled from the authoritative registry; abrupt process loss remains
+`started`. Either state consumes the attempt. Test results may be
 reported with their `retrospective_final` limitation but cannot be used to
 choose a different candidate, alter the gate, or tune another model.
 

@@ -98,5 +98,5 @@ def test_main_records_and_reraises_post_reservation_failure(
     assert receipt["status"] == "failed"
     assert receipt["failure"] == {
         "exception_type": "ValueError",
-        "message": "incomplete locked target window",
+        "message_omitted": True,
     }

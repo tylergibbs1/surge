@@ -27,7 +27,7 @@ the validation/base scaled-WIS ratio; a six-decimal tie favored fewer steps.
 | `official-lora-1000` | 0.501879 | 0.983058 | 0.326224 | 0.982891 | [0.973719, 0.990611] | 0.982975 |
 | `official-lora-2000` | 0.496713 | 0.972939 | 0.322472 | 0.971588 | [0.956031, 0.987785] | 0.972264 |
 
-`official-lora-2000` was therefore frozen as the winner. Its train/validation
+`official-lora-2000` was therefore frozen as the winner. Its validation/train
 macro-MASE ratio was 1.055910, its validation RTO coefficient of variation was
 0.126201, and its worst validation RTO MASE was 0.629784. The full-precision
 macro, per-RTO, per-origin, checkpoint-trace, dispersion, and paired

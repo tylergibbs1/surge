@@ -55,12 +55,6 @@ PAIRED_VALIDATION_BOOTSTRAP_SAMPLES = 2_000
 PAIRED_VALIDATION_BOOTSTRAP_SEED = 42
 PAIRED_VALIDATION_BOOTSTRAP_BLOCK_ORIGINS = 7
 _EPSILON = 1e-12
-_LOCKED_FAILURE_MESSAGE_MAX_LENGTH = 512
-_LOCKED_FAILURE_SECRET_RE = re.compile(
-    r"(?i)\b(token|api[-_]?key|secret|password|authorization)\b"
-    r"(\s*(?::|=)\s*|\s+)((?:bearer\s+)?[^\s,;]+)"
-)
-_LOCKED_FAILURE_BEARER_RE = re.compile(r"(?i)\bbearer\s+[^\s,;]+")
 
 
 @dataclass(frozen=True)
@@ -150,12 +144,67 @@ def _replace_json_atomically(path: Path, value: dict[str, Any]) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def _locked_test_started_records(receipt_path: Path) -> tuple[dict[str, Any], Path]:
-    """Load matching started receipt/registry records before a terminal update."""
+def _validate_locked_test_terminal_extension(
+    started: dict[str, Any],
+    terminal: dict[str, Any],
+) -> None:
+    """Validate an authoritative terminal record before repairing its receipt."""
+    for key, value in started.items():
+        if key != "status" and (key not in terminal or terminal[key] != value):
+            raise ValueError("locked-test terminal record changed its reservation identity")
+    status = terminal.get("status")
+    if status == "completed":
+        expected_extra = {"completed_at_utc", "result_sha256", "result"}
+        result = terminal.get("result")
+        if not isinstance(result, dict):
+            raise ValueError("locked-test result payload is malformed")
+        encoded_payload = json.dumps(
+            result,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+            allow_nan=False,
+        ).encode()
+        payload_sha256 = terminal.get("result_sha256")
+        timestamp_key = "completed_at_utc"
+    elif status == "failed":
+        expected_extra = {"failed_at_utc", "failure_sha256", "failure"}
+        failure = terminal.get("failure")
+        if (
+            not isinstance(failure, dict)
+            or set(failure) != {"exception_type", "message_omitted"}
+            or not isinstance(failure.get("exception_type"), str)
+            or not failure["exception_type"]
+            or len(failure["exception_type"]) > 128
+            or re.fullmatch(r"[A-Za-z0-9_.-]+", failure["exception_type"]) is None
+            or failure.get("message_omitted") is not True
+        ):
+            raise ValueError("locked-test failure payload is malformed")
+        encoded_payload = json.dumps(
+            failure,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode()
+        payload_sha256 = terminal.get("failure_sha256")
+        timestamp_key = "failed_at_utc"
+    else:
+        raise ValueError("locked-test authoritative record has an invalid terminal state")
+    if set(terminal) - set(started) != expected_extra:
+        raise ValueError("locked-test terminal record has unexpected fields")
+    timestamp = terminal.get(timestamp_key)
+    if not isinstance(timestamp, str) or datetime.fromisoformat(timestamp).tzinfo is None:
+        raise ValueError("locked-test terminal record has an invalid timestamp")
+    if payload_sha256 != hashlib.sha256(encoded_payload).hexdigest():
+        raise ValueError("locked-test terminal payload checksum does not match")
+
+
+def _locked_test_records(receipt_path: Path) -> tuple[dict[str, Any], Path]:
+    """Load records, repairing a lagging receipt from the authoritative registry."""
     path = receipt_path.expanduser().resolve()
     receipt = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(receipt, dict) or receipt.get("status") != "started":
-        raise ValueError("locked-test receipt is not in the started state")
+    if not isinstance(receipt, dict):
+        raise ValueError("locked-test receipt must contain a JSON object")
     reservation_value = receipt.get("registry_reservation")
     if not isinstance(reservation_value, str):
         raise ValueError("locked-test receipt is missing its registry reservation")
@@ -163,9 +212,18 @@ def _locked_test_started_records(receipt_path: Path) -> tuple[dict[str, Any], Pa
     if not reservation_path.is_file():
         raise ValueError("locked-test registry reservation is missing")
     reservation = json.loads(reservation_path.read_text(encoding="utf-8"))
-    if reservation != receipt:
+    if not isinstance(reservation, dict):
+        raise ValueError("locked-test registry reservation must contain a JSON object")
+    if reservation == receipt:
+        return receipt, reservation_path
+    if receipt.get("status") != "started":
         raise ValueError("locked-test receipt and registry reservation do not match")
-    return receipt, reservation_path
+    _validate_locked_test_terminal_extension(receipt, reservation)
+    _replace_json_atomically(path, reservation)
+    repaired = json.loads(path.read_text(encoding="utf-8"))
+    if repaired != reservation:
+        raise ValueError("locked-test receipt reconciliation did not persist")
+    return reservation, reservation_path
 
 
 def _terminalize_locked_test_run(
@@ -174,36 +232,34 @@ def _terminalize_locked_test_run(
 ) -> None:
     """Publish the same immutable terminal state to both locked-test records."""
     path = receipt_path.expanduser().resolve()
-    receipt, reservation_path = _locked_test_started_records(path)
+    receipt, reservation_path = _locked_test_records(path)
+    if receipt.get("status") != "started":
+        raise ValueError("locked-test receipt is not in the started state")
     terminal = {**receipt, **terminal_fields}
     # The operator-controlled registry is authoritative for second-look
     # rejection, so transition it first. Each destination observes either the
     # complete started record or the complete terminal record, never partial JSON.
     _replace_json_atomically(reservation_path, terminal)
-    _replace_json_atomically(path, terminal)
-
-
-def _sanitize_locked_test_failure(exc: BaseException) -> dict[str, str]:
-    """Return a bounded, single-line exception summary without traceback/secrets."""
-    exception_type = re.sub(r"[^A-Za-z0-9_.-]", "_", type(exc).__name__)[:128]
     try:
-        raw_message = str(exc)
+        _replace_json_atomically(path, terminal)
     except Exception:
-        raw_message = "<message unavailable>"
-    printable_message = "".join(
-        character if character.isprintable() else " " for character in raw_message
-    )
-    message = " ".join(printable_message.split())
-    message = _LOCKED_FAILURE_SECRET_RE.sub(
-        lambda match: f"{match.group(1)}{match.group(2)}<redacted>",
-        message,
-    )
-    message = _LOCKED_FAILURE_BEARER_RE.sub("Bearer <redacted>", message)
-    if len(message) > _LOCKED_FAILURE_MESSAGE_MAX_LENGTH:
-        message = message[: _LOCKED_FAILURE_MESSAGE_MAX_LENGTH - 3] + "..."
+        # A transient second-write failure is recoverable because the registry
+        # is authoritative. The loader validates its terminal extension before
+        # copying it over the still-started receipt.
+        reconciled, _ = _locked_test_records(path)
+        if reconciled != terminal:
+            raise ValueError("locked-test terminal reconciliation disagrees") from None
+    final, _ = _locked_test_records(path)
+    if final != terminal:
+        raise ValueError("locked-test terminal records do not match")
+
+
+def _locked_test_failure_metadata(exc: BaseException) -> dict[str, Any]:
+    """Return bounded failure metadata without persisting arbitrary exception text."""
+    exception_type = re.sub(r"[^A-Za-z0-9_.-]", "_", type(exc).__name__)[:128]
     return {
         "exception_type": exception_type or "Exception",
-        "message": message,
+        "message_omitted": True,
     }
 
 
@@ -1208,7 +1264,7 @@ def complete_locked_test_run(receipt_path: Path, result: dict[str, Any]) -> None
 
 def fail_locked_test_run(receipt_path: Path, exc: BaseException) -> None:
     """Record a post-reservation exception as an immutable terminal failure."""
-    failure = _sanitize_locked_test_failure(exc)
+    failure = _locked_test_failure_metadata(exc)
     encoded_failure = json.dumps(
         failure,
         sort_keys=True,

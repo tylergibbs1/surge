@@ -215,8 +215,10 @@ frozen experiment-protocol hash in
 `SURGE_LOCKED_TEST_REGISTRY` and creates `surge-locked-test-receipt.json` beside
 the selection artifact. Completion stores the metric payload and its hash in
 both records. A catchable exception is atomically mirrored as a terminal
-`failed` state with its UTC timestamp and sanitized exception summary; abrupt
-process loss leaves a consuming `started` reservation. All three states are
+`failed` state with its UTC timestamp and bounded exception type; message text
+and tracebacks are omitted. The registry is authoritative and safely repairs a
+receipt left at `started` by a transient second-write failure. Abrupt process
+loss leaves a consuming `started` reservation. All three states are
 consuming; terminal `completed` and `failed` states are immutable, and either
 non-completed state still rejects any second attempt.
 The immutable result retains full-precision metrics;

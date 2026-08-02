@@ -11,6 +11,7 @@ import numpy as np
 import polars as pl
 import pytest
 
+import experiments.overfit as overfit_module
 from experiments.eval_c2 import rolling_eval_c2
 from experiments.overfit import (
     FROZEN_DATA_SNAPSHOT_SHA256,
@@ -1069,7 +1070,7 @@ def test_locked_test_receipt_is_atomic_one_shot_and_records_result(
     assert registry_receipt["status"] == "completed"
 
 
-def test_locked_test_failure_is_sanitized_terminal_and_mirrored(
+def test_locked_test_failure_omits_message_and_is_terminally_mirrored(
     tmp_path: Path,
 ) -> None:
     marker_path = tmp_path / "surge-promotion.json"
@@ -1096,8 +1097,9 @@ def test_locked_test_failure_is_sanitized_terminal_and_mirrored(
     )
 
     failure = ValueError(
-        "NYIS origins lack finite targets\n"
-        "token=do-not-store authorization: Bearer do-not-store-either"
+        'Authorization: Basic dXNlcjpwYXNz {"token":"do-not-store"} '
+        "postgresql://alice:p4ssword@example.test/db "
+        "AWS_SECRET_ACCESS_KEY=do-not-store-either"
     )
     fail_locked_test_run(receipt_path, failure)
 
@@ -1109,12 +1111,11 @@ def test_locked_test_failure_is_sanitized_terminal_and_mirrored(
     assert datetime.fromisoformat(failed["failed_at_utc"]).tzinfo == UTC
     assert failed["failure"] == {
         "exception_type": "ValueError",
-        "message": (
-            "NYIS origins lack finite targets token=<redacted> "
-            "authorization: <redacted>"
-        ),
+        "message_omitted": True,
     }
-    assert "do-not-store" not in json.dumps(failed["failure"])
+    assert "do-not-store" not in json.dumps(failed)
+    assert "dXNlcjpwYXNz" not in json.dumps(failed)
+    assert "p4ssword" not in json.dumps(failed)
     encoded_failure = json.dumps(
         failed["failure"],
         sort_keys=True,
@@ -1141,6 +1142,51 @@ def test_locked_test_failure_is_sanitized_terminal_and_mirrored(
             model_artifact_sha256="c" * 64,
             registry_root=registry,
         )
+
+
+def test_locked_test_terminalization_reconciles_transient_receipt_write_failure(
+    monkeypatch, tmp_path: Path
+) -> None:
+    marker_path = tmp_path / "surge-promotion.json"
+    marker_path.write_text("{}", encoding="utf-8")
+    registry = tmp_path / "authoritative-registry"
+    protocol_sha256 = "b" * 64
+    receipt_path = reserve_locked_test_run(
+        tmp_path / "v0.2-h100-selection.json",
+        experiment="v0.2-transient-receipt-write-failure",
+        training_identity={"bas": list(TRUST_RTO_BAS)},
+        selection_sha256="f" * 64,
+        selection_decision_sha256="a" * 64,
+        experiment_protocol_sha256=protocol_sha256,
+        promotion_path=marker_path,
+        marker_sha256="d" * 64,
+        checkpoint_inventory_sha256="e" * 64,
+        model_artifact_sha256="c" * 64,
+        registry_root=registry,
+    )
+    real_replace = overfit_module._replace_json_atomically
+    calls = 0
+
+    def fail_second_replace_once(path: Path, value: dict) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected receipt replace failure")
+        real_replace(path, value)
+
+    monkeypatch.setattr(
+        overfit_module,
+        "_replace_json_atomically",
+        fail_second_replace_once,
+    )
+
+    fail_locked_test_run(receipt_path, ValueError("sensitive text omitted"))
+
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    authoritative = json.loads((registry / f"{protocol_sha256}.json").read_text())
+    assert calls == 3
+    assert receipt == authoritative
+    assert receipt["status"] == "failed"
 
 
 def test_diagnostic_exception_artifact_is_explicitly_rejected() -> None:
