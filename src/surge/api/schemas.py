@@ -29,12 +29,12 @@ class ForecastPoint(BaseModel):
         description="90th percentile — upper end of the published 80% PI, "
         "after conformal calibration when it applied",
     )
-    model_p10_mw: float | None = Field(
+    uncalibrated_p10_mw: float | None = Field(
         None,
         description="The model's own p10 before calibration. Published so a "
         "widened or tightened interval can be audited against its source.",
     )
-    model_p90_mw: float | None = Field(
+    uncalibrated_p90_mw: float | None = Field(
         None, description="The model's own p90 before calibration."
     )
     temp_c: float | None = Field(

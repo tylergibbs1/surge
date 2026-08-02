@@ -40,6 +40,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import modal
 
@@ -261,7 +262,7 @@ def _probe_all_forecasts(issued_at_utc) -> dict[str, dict[str, object]]:
         raise RuntimeError("configured model has no load-v2-core training contract")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if device == "cuda" else torch.float32
-    load_kwargs = {"device_map": device, "dtype": dtype}
+    load_kwargs: dict[str, Any] = {"device_map": device, "dtype": dtype}
     load_revision = forecaster.model_load_revision()
     if load_revision is not None:
         load_kwargs["revision"] = load_revision

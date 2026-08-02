@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 
 from surge.calibration import (
-    MIN_HISTORY_MATURE_ORIGINS,
     TARGET_COVERAGE,
     CalibrationState,
     MaturedOrigin,
@@ -134,3 +133,22 @@ def test_calibration_state_defaults_are_inert() -> None:
     state = CalibrationState(applied=False)
     assert state.adjustment_mw == []
     assert state.mature_origins == 0
+
+
+def test_history_loader_joins_through_issuances_for_the_ba() -> None:
+    """forecast_points carries no BA of its own; the join is required.
+
+    Filtering points on a column they do not have raised, and the loader's
+    broad except turned that into "no history" -- so calibration would have
+    silently never engaged in production.
+    """
+    import inspect
+
+    from surge import calibration
+
+    source = inspect.getsource(calibration.matured_history)
+    assert 'store.scan("forecast_issuances")' in source
+    assert 'pl.col("ba") == ba' in source
+    # The BA filter must be applied to issuances, never to forecast_points.
+    points_call = source.split('store.scan("forecast_points")')[1].split(".collect()")[0]
+    assert '"ba"' not in points_call

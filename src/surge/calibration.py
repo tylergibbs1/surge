@@ -257,9 +257,21 @@ def matured_history(
     from surge import store
 
     try:
+        # forecast_points carries no BA of its own; the BA and the issuance
+        # timing live on forecast_issuances, so the join is required rather
+        # than incidental.
+        issuances = (
+            store.scan("forecast_issuances")
+            .filter(pl.col("ba") == ba)
+            .select("issuance_id", "issued_at_utc", "first_valid_at_utc")
+            .collect()
+        )
+        if issuances.is_empty():
+            return []
+        wanted = issuances["issuance_id"].implode()
         points = (
             store.scan("forecast_points")
-            .filter(pl.col("ba") == ba)
+            .filter(pl.col("issuance_id").is_in(wanted))
             .select("issuance_id", "valid_at_utc", "p10_mw", "p90_mw")
             .collect()
         )
@@ -276,7 +288,9 @@ def matured_history(
     if points.is_empty() or verified.is_empty():
         return []
 
-    joined = points.join(verified, on=["issuance_id", "valid_at_utc"], how="inner")
+    joined = points.join(verified, on=["issuance_id", "valid_at_utc"], how="inner").join(
+        issuances.select("issuance_id", "issued_at_utc"), on="issuance_id", how="inner"
+    )
     if joined.is_empty():
         return []
 
@@ -288,8 +302,7 @@ def matured_history(
         if group.height != horizon:
             # A partially settled or short issuance is not a usable origin.
             continue
-        first_valid = group["valid_at_utc"][0]
-        origin = first_valid - timedelta(hours=1)
+        origin = group["issued_at_utc"][0]
         del issuance_id
         out.append(
             MaturedOrigin(

@@ -230,8 +230,8 @@ def forecast_ba(
                 "p50_mw": p50,
                 "median_mw": p50,
                 "p90_mw": float(calibrated_high[index]),
-                "model_p10_mw": float(quantiles[index, 0]),
-                "model_p90_mw": float(quantiles[index, 2]),
+                "uncalibrated_p10_mw": float(quantiles[index, 0]),
+                "uncalibrated_p90_mw": float(quantiles[index, 2]),
                 # LOAD_V2_CORE has no future temperature input. Keep nullable
                 # compatibility fields explicit so clients cannot mistake an
                 # observed or persisted value for a weather forecast.

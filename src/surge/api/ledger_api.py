@@ -120,6 +120,12 @@ def response_from_record(
                 median_mw=point.p50_mw,
                 p10_mw=point.p10_mw,
                 p90_mw=point.p90_mw,
+                # The persisted ledger stores the interval as published. It does
+                # not yet retain the pre-calibration interval, so a record read
+                # back cannot expose it; live responses can. Closing that gap
+                # needs a ledger schema revision.
+                uncalibrated_p10_mw=None,
+                uncalibrated_p90_mw=None,
                 temp_c=point.future_temp_c,
             )
             for point in record.points
