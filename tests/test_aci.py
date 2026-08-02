@@ -72,11 +72,43 @@ def test_adaptive_level_widens_further_than_the_fixed_level_when_missing() -> No
     assert np.nanmean(adaptive.adjustment[late]) > np.nanmean(fixed.adjustment[late])
 
 
-def test_calibration_never_shrinks_the_input_interval() -> None:
+def test_an_over_wide_interval_is_allowed_to_tighten() -> None:
+    """The signed score's negative branch is what bounds coverage from above.
+
+    Clamping it at zero leaves a ratchet that can only widen, which pushes an
+    already-calibrated series past nominal.
+    """
     calibrated = _calibrate(gamma=0.05)
     eligible = calibrated.eligible
     assert eligible.any()
-    assert np.all(calibrated.adjustment[eligible] >= 0.0)
+    assert np.any(calibrated.adjustment[eligible] < 0.0)
+
+
+def test_a_width_floor_bounds_how_far_an_interval_may_tighten() -> None:
+    """The safety property, expressed without breaking the estimator."""
+    lower, median, upper, truth = _series(origins=40)
+    raw_width = float((upper - lower)[0, 0, 0])
+    calibrated = aci_conformalize(
+        lower,
+        median,
+        upper,
+        truth,
+        origin_times_utc=_daily_origins(40),
+        outcome_delay_hours=0,
+        window=10,
+        min_history=2,
+        gamma=0.05,
+        min_width_fraction=1.0,
+    )
+    eligible = calibrated.eligible
+    widths = (calibrated.upper - calibrated.lower)[eligible]
+    assert eligible.any()
+    assert np.all(widths >= raw_width - 1e-9)
+
+
+def test_min_width_fraction_is_validated() -> None:
+    with pytest.raises(ValueError, match="min_width_fraction must be in"):
+        _calibrate(min_width_fraction=1.5)
 
 
 def test_outcomes_cannot_feed_back_before_they_mature() -> None:

@@ -23,6 +23,16 @@ Two deliberate departures from the literature:
 keeps one level per (series, lead) as in the multi-step ACI literature;
 ``"per-series"`` shares one level across a series' leads, so it observes every
 lead's outcome and adapts far faster on a one-year validation cohort.
+
+``min_width_fraction`` is a floor on the calibrated width as a fraction of the
+model's own interval. It exists because "calibration must never ship a reckless
+interval" is a legitimate policy, but clamping the *conformity score* at zero is
+the wrong way to enforce it: the score is signed by construction, and its
+negative branch is what delivers CQR's upper coverage bound (Romano, Patterson &
+Candes, 2019). Clamping it leaves a one-way ratchet that pushes an
+already-calibrated series past nominal. A width floor states the same intent
+without breaking the estimator; ``1.0`` reproduces the old never-narrow
+behaviour and ``0.0`` is canonical CQR.
 """
 
 from __future__ import annotations
@@ -62,13 +72,15 @@ def aci_conformalize(
     coverage: float = 0.8,
     gamma: float = 0.01,
     alpha_scope: AlphaScope = "per-series",
+    min_width_fraction: float = 0.0,
     normalized: bool = True,
 ) -> CalibratedIntervals:
     """Calibrate ``(origin, series, horizon)`` arrays with an adaptive level.
 
-    Maturity, windowing, score normalization and the no-shrink guarantee match
-    ``rolling_conformalize`` exactly. The only difference is that the quantile
-    level adapts per series instead of staying at ``coverage``.
+    Maturity, windowing and score normalization match ``rolling_conformalize``.
+    Two things differ: the quantile level adapts per series instead of staying
+    at ``coverage``, and the signed conformity score is honoured in both
+    directions rather than clamped at zero.
     """
     low = np.asarray(lower, dtype=np.float64)
     mid = np.asarray(median, dtype=np.float64)
@@ -88,6 +100,8 @@ def aci_conformalize(
         raise ValueError("gamma must be in (0, 1)")
     if alpha_scope not in ALPHA_SCOPES:
         raise ValueError(f"alpha_scope must be one of {ALPHA_SCOPES}")
+    if not 0.0 <= min_width_fraction <= 1.0:
+        raise ValueError("min_width_fraction must be in [0, 1]")
     if outcome_delay_hours < 0:
         raise ValueError("outcome_delay_hours must be nonnegative")
     if not np.isfinite(low).all() or not np.isfinite(mid).all() or not np.isfinite(high).all():
@@ -156,12 +170,38 @@ def aci_conformalize(
                         EFFECTIVE_COVERAGE_CEILING,
                     )
                 )
-                adjustment = max(
-                    finite_sample_quantile(scores, coverage=effective_coverage), 0.0
-                )
+                # The conformity score is signed: negative means the interval was
+                # comfortably right and should tighten. Discarding that branch
+                # discards CQR's upper coverage bound and leaves a ratchet that
+                # can only widen. The width floor below is how a "never ship a
+                # reckless interval" policy is expressed without breaking it.
+                adjustment = finite_sample_quantile(scores, coverage=effective_coverage)
                 scaled = adjustment * widths[origin, series, horizon]
+                raw_width = high[origin, series, horizon] - low[origin, series, horizon]
                 calibrated_low[origin, series, horizon] = low[origin, series, horizon] - scaled
                 calibrated_high[origin, series, horizon] = high[origin, series, horizon] + scaled
+                if min_width_fraction > 0.0:
+                    floor_width = min_width_fraction * raw_width
+                    current = (
+                        calibrated_high[origin, series, horizon]
+                        - calibrated_low[origin, series, horizon]
+                    )
+                    if current < floor_width:
+                        centre = 0.5 * (
+                            calibrated_low[origin, series, horizon]
+                            + calibrated_high[origin, series, horizon]
+                        )
+                        calibrated_low[origin, series, horizon] = centre - 0.5 * floor_width
+                        calibrated_high[origin, series, horizon] = centre + 0.5 * floor_width
+                elif calibrated_high[origin, series, horizon] < calibrated_low[
+                    origin, series, horizon
+                ]:
+                    centre = 0.5 * (
+                        calibrated_low[origin, series, horizon]
+                        + calibrated_high[origin, series, horizon]
+                    )
+                    calibrated_low[origin, series, horizon] = centre
+                    calibrated_high[origin, series, horizon] = centre
                 adjustments[origin, series, horizon] = scaled
                 eligible[origin, series, horizon] = True
                 observed = actual[origin, series, horizon]
