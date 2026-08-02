@@ -24,13 +24,26 @@ SLA.
 ![Day-ahead forecast vs. reality for US grids](https://raw.githubusercontent.com/tylergibbs1/surge/main/docs/plots/hero_forecast.png)
 
 > [!IMPORTANT]
-> The historical v1-v3 benchmark used realized future ASOS temperature as an
-> oracle covariate; experiment configurations with generation enabled also use
-> realized wind and solar. Those results are an upper-bound research lane, not
-> an apples-to-apples production comparison. The earlier "beats operators on
-> 6 of 7 RTOs" claim has been withdrawn until a vintage-weather replay and an
-> immutable live-forward evaluation are published. See the
-> [benchmark protocol](https://github.com/tylergibbs1/surge/blob/main/docs/benchmark-protocol.md).
+> **The earlier "beats operators on 6 of 7 RTOs" claim was wrong, for two
+> independent reasons that both flattered Surge.** First, the v1-v3 benchmark
+> fed realized future ASOS temperature into the backtest as an oracle covariate
+> (generation-enabled runs also used realized wind and solar); production has
+> none of these. Second, the operator baseline it was measured against was
+> misaligned by one hour for PJM and CISO, overstating their error by 39.5% and
+> 14.1%. Corrected, "PJM: 1.70x better" becomes 1.22x.
+>
+> Measured honestly on 2024 — calendar-only covariates, hour-corrected
+> operator, identical target hours — **Surge averages 3.09% MAPE against the
+> operators' 3.03%, losing on four of seven RTOs**, and even that flatters
+> Surge because its forecast lead time is shorter. Surge is competitive with
+> published open baselines; it is not currently better than the operators.
+>
+> Separately, the shipped `surge-fm-v3` intervals under-cover badly: its own
+> published evaluation reports 0.725 mean coverage on a nominal 80% band.
+>
+> Full numbers and derivations:
+> [accuracy restatement](https://github.com/tylergibbs1/surge/blob/main/docs/accuracy-restatement.md)
+> and [benchmark protocol](https://github.com/tylergibbs1/surge/blob/main/docs/benchmark-protocol.md).
 
 ## What is included
 
