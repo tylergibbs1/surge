@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 
 import polars as pl
 
-from surge import store
+from surge import store, vintage
 from surge.scrapers.base import client, get
 
 API = "https://api.eia.gov/v2/electricity/rto/region-data/data/"
@@ -61,6 +61,22 @@ def load(ba: str, start: str, end: str, *, force: bool = False) -> pl.DataFrame:
             if len(batch) < params["length"]:
                 break
             params["offset"] += params["length"]
+
+    # Archive what EIA said before anything reshapes it. EIA-930 is preliminary
+    # on publication and revised afterwards, so a score is a claim about a
+    # vintage; a vintage not captured now cannot be recovered later.
+    if os.environ.get("SURGE_VINTAGE_ARCHIVE", "1") != "0":
+        try:
+            vintage.capture(
+                dataset="eia930-demand",
+                ba=ba,
+                start=start,
+                end=end,
+                rows=rows,
+                request={**params, "url": API},
+            )
+        except Exception as exc:
+            print(f"vintage archive failed for {ba} {start}..{end}: {type(exc).__name__}")
 
     if not rows:
         return pl.DataFrame(schema={"ts_utc": pl.Datetime(time_zone="UTC"),

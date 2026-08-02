@@ -75,6 +75,10 @@ CODE_REVISION = _code_revision()
 MODEL_ENV = {
     "PYTHONPATH": "/workspace/src",
     "SURGE_DATA_DIR": "/workspace/data",
+    # On the volume, not container-local disk. The hourly ingest refetches the
+    # last 72 h every hour, which is exactly the cadence that captures EIA's
+    # in-place revisions -- but only if the archive survives the container.
+    "SURGE_VINTAGE_DIR": "/workspace/data/vintage",
     "SURGE_MODEL_PATH": HF_MODEL_ID,
     "SURGE_MODEL_FEATURE_SPEC_SHA256": HF_MODEL_FEATURE_SPEC_SHA256,
     "SURGE_MODEL_ARTIFACT_SHA256": HF_MODEL_ARTIFACT_SHA256,
