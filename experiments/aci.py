@@ -58,6 +58,14 @@ ALPHA_CEILING = 0.5
 EFFECTIVE_COVERAGE_FLOOR = 0.5
 EFFECTIVE_COVERAGE_CEILING = 0.999
 
+# The policy under study. The research harness reads these rather than passing
+# its own, so the harness stays fixed and every change lives in this module.
+DEFAULT_WINDOW = 168
+DEFAULT_GAMMA = 0.05
+DEFAULT_ALPHA_SCOPE: AlphaScope = "per-series"
+DEFAULT_MIN_HISTORY = 28
+DEFAULT_MIN_WIDTH_FRACTION = 0.0
+
 
 def aci_conformalize(
     lower: np.ndarray,
