@@ -117,9 +117,17 @@ def aligned_cohort(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cohort-year", type=int, default=2023)
-    parser.add_argument("--gamma", type=float, default=0.05)
-    parser.add_argument("--window", type=int, default=168)
-    parser.add_argument("--alpha-scope", choices=list(ALPHA_SCOPES), default="per-series")
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        nargs="+",
+        default=[0.05],
+        help="One value replicates a frozen policy; several characterize a grid.",
+    )
+    parser.add_argument("--window", type=int, nargs="+", default=[168])
+    parser.add_argument(
+        "--alpha-scope", nargs="+", choices=list(ALPHA_SCOPES), default=["per-series"]
+    )
     parser.add_argument("--model", default="amazon/chronos-2")
     parser.add_argument("--model-revision", default=PINNED_CHRONOS2_REVISION)
     parser.add_argument("--bas", nargs="+", default=list(RTO_BAS))
@@ -153,8 +161,8 @@ def main() -> None:
         validate_cohort_year(args.cohort_year)
     except ValueError as exc:
         parser.error(str(exc))
-    if not 0 < args.gamma < 1:
-        parser.error("--gamma must be in (0, 1)")
+    if any(gamma <= 0 or gamma >= 1 for gamma in args.gamma):
+        parser.error("every --gamma value must be in (0, 1)")
 
     verify_code_checkout(Path(__file__).resolve().parents[1], args.code_revision)
     data_root_value = os.environ.get("SURGE_DATA_DIR")
@@ -211,29 +219,34 @@ def main() -> None:
         "coverage": args.coverage,
         "normalized": True,
     }
-    runs = {
-        "frozen-adaptive": CandidateRun(
+    runs: dict[str, CandidateRun] = {}
+    for window in args.window:
+        for gamma in args.gamma:
+            for scope in args.alpha_scope:
+                tag = "lead" if scope == "per-lead" else "series"
+                runs[f"adaptive/{tag}/g{gamma}/w{window}"] = CandidateRun(
+                    pooled=False,
+                    window=window,
+                    calibrated=aci_conformalize(
+                        lower,
+                        median,
+                        upper,
+                        truth,
+                        window=window,
+                        gamma=gamma,
+                        alpha_scope=scope,
+                        **shared,
+                    ),
+                )
+    for window in args.window:
+        runs[f"reference-fixed/w{window}"] = CandidateRun(
             pooled=False,
-            window=args.window,
-            calibrated=aci_conformalize(
-                lower,
-                median,
-                upper,
-                truth,
-                window=args.window,
-                gamma=args.gamma,
-                alpha_scope=args.alpha_scope,
-                **shared,
-            ),
-        ),
-        "reference-fixed": CandidateRun(
-            pooled=False,
-            window=args.window,
+            window=window,
             calibrated=rolling_conformalize(
-                lower, median, upper, truth, window=args.window, pooled_series=False, **shared
+                lower, median, upper, truth, window=window, pooled_series=False, **shared
             ),
-        ),
-    }
+        )
+    single_policy = len(runs) == 2  # one adaptive policy plus its fixed reference
     scored = _common_eligible(list(runs.values()))
     cohort_start, cohort_end = _eligible_origin_range(origins, scored, truth)
 
@@ -252,8 +265,12 @@ def main() -> None:
         for label, run in runs.items()
     }
     output = {
-        "schema_version": 1,
-        "protocol": "single-shot-replication-of-a-frozen-calibration-policy",
+        "schema_version": 2,
+        "protocol": (
+            "single-shot-replication-of-a-frozen-calibration-policy"
+            if single_policy
+            else "policy-grid-characterization-on-an-unsearched-cohort"
+        ),
         "availability_mode": AvailabilityMode.RETROSPECTIVE_FINAL.value,
         "held_out_test_lane": "not-opened",
         "point_in_time_replay": False,
@@ -267,6 +284,7 @@ def main() -> None:
             "alpha_scope": args.alpha_scope,
             "min_history_mature_origins": args.min_history,
             "source": "artifacts/adaptive-conformal-validation.json",
+            "single_policy_replication": single_policy,
         },
         "cohort": {
             "year": args.cohort_year,
@@ -301,7 +319,14 @@ def main() -> None:
             "predict_seconds": round(predict_seconds, 3),
         },
         "results": results,
-        "replication_holds": bool(results["frozen-adaptive"]["coverage_constraint_satisfied"]),
+        # Every evaluated policy is listed, whatever it did. A grid run reports
+        # which policies met the bar; it never selects one.
+        "policies_meeting_coverage_bar": sorted(
+            label
+            for label, summary in results.items()
+            if summary["coverage_constraint_satisfied"]
+        ),
+        "policy_count": len(results),
     }
     payload: dict[str, Any] = output
     text = json.dumps(payload, indent=2, sort_keys=True)
