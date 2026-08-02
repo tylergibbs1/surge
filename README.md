@@ -1,18 +1,22 @@
 # Surge Grid
 
-**Open, probabilistic load forecasting and auditable grid data for the United States.**
+**Open, probabilistic load forecasting and auditable grid data for the United
+States.**
 
-Surge Grid combines a Python data library, a Chronos-2 forecast service, and a
-web playground spanning the 53 EIA-930 balancing authorities that publish a
-demand series. The v0.2 trust ledger deliberately has a narrower contract: the
-Python ledger publishes an immutable complete-run marker only after all seven
-organized-market RTO/ISOs have compatible issuances, and the Vercel `current`
-pointer separately advances only after that complete run validates. Public run
-lists and the scoreboard expose only marked complete runs; a staged per-BA
-issuance remains available by direct ID for audit. The remaining 46-BA
-explorer/API surface is legacy and best-effort. The public demo at
-[surgeforecast.com](https://surgeforecast.com) has no availability or freshness
-SLA.
+Surge Grid has three parts: a Python data library, a Chronos-2 forecast service,
+and a web playground. It covers the 53 EIA-930 balancing authorities that publish
+a demand series.
+
+The v0.2 trust ledger has a narrower contract than the playground. The Python
+ledger publishes a complete-run marker only after all seven organized-market
+RTO/ISOs have compatible issuances. The Vercel `current` pointer advances only
+after that complete run passes validation. Public run lists and the scoreboard
+show only complete runs. A staged per-BA issuance stays available by direct ID
+for audit.
+
+The other 46 balancing authorities are a legacy, best-effort surface. The public
+demo at [surgeforecast.com](https://surgeforecast.com) has no availability or
+freshness promise.
 
 - [Live playground](https://surgeforecast.com)
 - [Source](https://github.com/tylergibbs1/surge)
@@ -24,60 +28,87 @@ SLA.
 ![Day-ahead forecast vs. reality for US grids](https://raw.githubusercontent.com/tylergibbs1/surge/main/docs/plots/hero_forecast.png)
 
 > [!IMPORTANT]
-> **The earlier "beats operators on 6 of 7 RTOs" claim was wrong, for two
-> independent reasons that both flattered Surge.** First, the v1-v3 benchmark
-> fed realized future ASOS temperature into the backtest as an oracle covariate
-> (generation-enabled runs also used realized wind and solar); production has
-> none of these. Second, the operator baseline it was measured against was
-> misaligned by one hour for PJM and CISO, overstating their error by 39.5% and
-> 14.1%. Corrected, "PJM: 1.70x better" becomes 1.22x.
+> **The earlier claim "beats operators on 6 of 7 RTOs" was wrong.** Two separate
+> errors caused it. Both errors made Surge look better than it is.
 >
-> Measured honestly on 2024 — calendar-only covariates, hour-corrected
-> operator, identical target hours — **Surge averages 3.09% MAPE against the
-> operators' 3.03%, losing on four of seven RTOs**, and even that flatters
-> Surge because its forecast lead time is shorter. Surge is competitive with
-> published open baselines; it is not currently better than the operators.
+> First, the v1-v3 benchmark used realized future temperature as an oracle input.
+> Runs with generation enabled also used realized wind and solar. Production has
+> none of these inputs.
 >
-> Separately, the shipped `surge-fm-v3` intervals under-cover badly: its own
-> published evaluation reports 0.725 mean coverage on a nominal 80% band.
+> Second, the operator baseline was one hour out of alignment for PJM and CISO.
+> This overstated their error by 39.5% and 14.1%. After correction, "PJM: 1.70x
+> better" becomes 1.22x.
 >
-> Full numbers and derivations:
+> A correct measurement on 2024 uses calendar-only inputs, an hour-corrected
+> operator, and the same target hours. **Surge averages 3.09% MAPE against the
+> operators' 3.03%, and loses on four of seven RTOs.** Surge also has a shorter
+> forecast lead time, which makes even this result too favorable.
+>
+> Surge is competitive with published open baselines. Surge is not better than
+> the operators today.
+>
+> The shipped `surge-fm-v3` intervals are too narrow. Its own published
+> evaluation reports 0.725 coverage for a nominal 80% band.
+>
+> For the numbers and the derivations, read the
 > [accuracy restatement](https://github.com/tylergibbs1/surge/blob/main/docs/accuracy-restatement.md)
-> and [benchmark protocol](https://github.com/tylergibbs1/surge/blob/main/docs/benchmark-protocol.md).
+> and the
+> [benchmark protocol](https://github.com/tylergibbs1/surge/blob/main/docs/benchmark-protocol.md).
 
 ## What is included
 
-- `surge` is the Python import package. It pulls and harmonizes EIA-930 load,
-  ASOS weather, public CAISO/ERCOT/PJM data, and related grid datasets into a
-  local Parquet store.
-- The v0.2 service defaults to upstream `amazon/chronos-2` at immutable revision
+- `surge` is the Python import package. It reads EIA-930 load, ASOS weather, and
+  public CAISO/ERCOT/PJM data into a local Parquet store.
+- The v0.2 service uses upstream `amazon/chronos-2` at immutable revision
   `29ec3766d36d6f73f0696f85560a422f50e8498c`. It does not serve the legacy
-  `surge-fm-v3` fine-tune, whose training provenance belongs to the archived
-  oracle benchmark.
-- A tuned replacement cannot become `best/` unless its frozen audit passes
-  train/validation generalization gaps, per-RTO dispersion, worst-grid and
-  upstream-baseline regressions, checkpoint-loss stability, and complete-window
-  coverage. The locked 2025 test stays unopened until that decision is frozen.
-- `surge.api` is a FastAPI inference service with OpenAPI documentation and
+  `surge-fm-v3` fine-tune, because that model comes from the archived oracle
+  benchmark.
+- A tuned replacement cannot become `best/` until its frozen audit passes. The
+  audit covers generalization gaps, per-RTO dispersion, worst-grid and
+  upstream-baseline regressions, checkpoint-loss stability, and window coverage.
+- `surge.api` is a FastAPI inference service. It has OpenAPI documentation and
   NDJSON streaming.
 - `web/playground` is the Next.js map, grid view, and forecast explorer.
-- The seven-RTO v0.2 forecast ledger separates issuance time, input cutoff,
-  model revision, publication time, and verification so a newly generated
-  response cannot make old source data look fresh. It stages immutable per-BA
-  issuances, exposes a public run only after one compatible seven-RTO
-  `forecast_runs` marker exists, and keeps direct issuance detail available for
-  audit. The validated Vercel `current` pointer is a second atomic publication
-  boundary.
+- `surge.vintage` stores each EIA response under a content hash before anything
+  changes it. EIA revises this data later, so a score is a claim about one
+  vintage of the truth. A vintage that nobody captures cannot be rebuilt.
+- `surge.calibration` corrects each interval against the settled history of the
+  same BA. The raw 80% band of the model covers 73% to 76% of outcomes.
 
 The v0.2 `load-v2-core` feature contract uses observed temperature only in the
-historical context and permits only deterministic calendar fields in the
-forecast horizon. Observed temperature, wind, and solar are structurally
-forbidden as future inputs. Surge does not yet ingest an operational weather
-forecast, so the service makes no claim of forecast-time weather skill.
+historical context. It permits only deterministic calendar fields in the forecast
+horizon. Observed temperature, wind, and solar cannot be future inputs. Surge does
+not read an operational weather forecast, so it claims no forecast-time weather
+skill.
+
+## Measured accuracy
+
+All numbers below use the 2024 validation lane, seven RTOs, and identical target
+hours. The locked 2025 lane stays closed.
+
+| Model | Mean MAPE |
+|---|---:|
+| Same hour, previous day | 4.79 |
+| Open GBM baseline | 2.98 |
+| Chronos-2, zero shot | 2.88 |
+| **Blend of the two** | **2.72** |
+
+The blend weight comes from the first half of 2024 only. The table reports the
+second half, which did not choose that weight. Every RTO improves over its own
+best single model, by 1.3% to 6.6%.
+
+Calibration corrects the intervals. Replayed across 2024, the worst per-RTO
+coverage error falls from 7.54 points to 1.19 points. Interval width grows by
+10% to 20%.
+
+Note: ISO-NE is the hardest RTO for both models, at about 4.9% MAPE. Its EIA-930
+series is net load, and several GW of behind-the-meter solar are invisible in the
+inputs. About 1.5 of the 2.1-point gap to the operator needs an irradiance
+forecast that Surge does not use.
 
 ## Install
 
-The distribution is named `surge-grid`; the Python import remains `surge`.
+The distribution is `surge-grid`. The Python import stays `surge`.
 
 ```bash
 pip install surge-grid
@@ -90,8 +121,8 @@ df = surge.load(ba="PJM", start="2025-06-01", end="2025-06-02")
 print(df.head())
 ```
 
-The EIA loader requires a free `EIA_API_KEY`. Copy `.env.example` and keep the
-filled file outside version control.
+The EIA loader needs a free `EIA_API_KEY`. Copy `.env.example`, then keep the
+filled file out of version control.
 
 ## Run the API locally
 
@@ -108,7 +139,7 @@ python -m surge.ingest \
 uvicorn surge.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Then query one balancing authority or stream the complete set:
+Then query one balancing authority, or stream the complete set:
 
 ```bash
 curl --fail 'http://127.0.0.1:8000/forecast/PJM?horizon=24'
@@ -116,44 +147,46 @@ curl --fail --no-buffer 'http://127.0.0.1:8000/forecast/stream?horizon=24'
 curl --fail 'http://127.0.0.1:8000/bas'
 ```
 
-For source development, replace the package install with
-`pip install -e ".[dev,api]"`. A fully offline recovery, including the pinned
-model and data snapshot, is documented in the
+To develop from source, install `pip install -e ".[dev,api]"` instead. For a
+fully offline recovery, read the
 [operations runbook](https://github.com/tylergibbs1/surge/blob/main/docs/operations.md).
 
 ## Evidence status
 
-The archived v3 experiment reports a 2025 hold-out MASE of 0.636 macro across
-53 balancing authorities and 0.518 on the original seven-RTO subset. The
-original v2 seven-RTO checkpoint reports 0.492. These are **oracle-covariate
-offline results**: rolling 24-hour origins, step 24, with MASE denominators
-computed per BA from the training split. They are useful for model development,
-but they are not live-forward performance estimates.
+The archived v3 experiment reports a 2025 hold-out MASE of 0.636 across 53
+balancing authorities. It reports 0.518 on the original seven-RTO subset. The
+older v2 seven-RTO checkpoint reports 0.492.
 
-Surge Grid reports evaluation results in three non-interchangeable lanes:
+These are **oracle-covariate offline results**. They use rolling 24-hour origins
+and step 24. The MASE denominator comes from the training split of each BA. They
+are useful for model development. They are not live-forward performance.
 
-1. **Oracle upper bound** — realized future covariates; never labeled deployable.
-2. **Vintage replay** — only inputs whose issue or availability time precedes
-   the forecast origin.
-3. **Live forward** — forecasts frozen before outcomes and scored later against
-   a declared actuals vintage.
+Surge Grid reports results in three lanes. You cannot compare a number from one
+lane against a number from another lane.
 
-The repository does not currently publish a complete lane-2 or lane-3 result
-set. Operator comparisons and the approximately 70-hour useful-horizon result
-remain historical oracle experiments until rerun under those protocols.
+1. **Oracle upper bound** — realized future inputs. Never deployable.
+2. **Vintage replay** — only inputs available before the forecast origin.
+3. **Live forward** — forecasts frozen before the outcome, and scored later
+   against a declared actuals vintage.
+
+The repository does not yet publish a complete lane-2 or lane-3 result set.
+Operator comparisons and the 70-hour useful-horizon result stay historical oracle
+experiments until someone runs them again under these protocols.
 
 ## Operational contract
 
-- `generated_at_utc` is when inference ran.
-- `context_end_utc` / `data_cutoff_utc` identify the newest model input.
+- `generated_at_utc` is the time that inference ran.
+- `context_end_utc` and `data_cutoff_utc` identify the newest model input.
 - `published_at_utc` identifies publication, not source freshness.
 - Model and code revisions travel with each immutable issuance.
 - A partial seven-RTO bake must not replace the last complete published run.
-- Stale observations may be retained for diagnosis, but must be marked stale or
-  unavailable rather than silently presented as current.
+- Surge can keep stale observations for diagnosis. It must mark them stale or
+  unavailable. It must not show them as current.
+- Each issuance records whether calibration applied, and why not when it did not.
 
-The authoritative thresholds, restore procedure, and rollback rules live in
-the [operations runbook](https://github.com/tylergibbs1/surge/blob/main/docs/operations.md).
+The authoritative thresholds, the restore procedure, and the rollback rules are
+in the
+[operations runbook](https://github.com/tylergibbs1/surge/blob/main/docs/operations.md).
 
 ## Development
 
@@ -175,30 +208,38 @@ pnpm typecheck
 pnpm build
 ```
 
-See the [contribution guide](https://github.com/tylergibbs1/surge/blob/main/CONTRIBUTING.md),
-the [reproducibility guide](https://github.com/tylergibbs1/surge/blob/main/docs/reproducibility.md),
-and the [release checklist](https://github.com/tylergibbs1/surge/blob/main/docs/release-checklist.md).
+Read the
+[contribution guide](https://github.com/tylergibbs1/surge/blob/main/CONTRIBUTING.md),
+the
+[reproducibility guide](https://github.com/tylergibbs1/surge/blob/main/docs/reproducibility.md),
+and the
+[release checklist](https://github.com/tylergibbs1/surge/blob/main/docs/release-checklist.md).
 
 ## Project status
 
-v0.2 is an alpha research release. Its Vercel pointer publication and
-forward-scoring ledger contract cover PJM, CISO, ERCO, MISO, NYIS, ISNE, and
-SWPP. The repository does not yet publish a settled live-forward result set.
-The frozen adapter experiment is retained as
-[checksummed model-selection evidence](artifacts/v0.2/README.md), but its one
-authorized 2025 test failed closed on incomplete NYIS target windows before
-producing metrics. No locked-test accuracy result is claimed, and the adapter
-is not the tested serving default.
-The broader
-53-BA playground is useful for exploration and demonstration, but it is not a
-complete atomic release surface, a production control-plane, or an availability
-promise. Current priorities are forecast-time weather replay, calibrated
-uncertainty, reproducible snapshots, and decision-focused scenario tooling.
+v0.2 is an alpha research release. Its ledger contract covers PJM, CISO, ERCO,
+MISO, NYIS, ISNE, and SWPP. The repository does not yet publish a settled
+live-forward result set.
+
+The frozen adapter experiment stays as
+[checksummed model-selection evidence](artifacts/v0.2/README.md). Its one
+authorized 2025 test failed closed on incomplete NYIS target windows, before it
+produced any metric. Surge claims no locked-test accuracy result. The adapter is
+not the serving default.
+
+The 53-BA playground is useful for exploration and demonstration. It is not a
+complete atomic release surface, a production control plane, or an availability
+promise.
+
+Current priorities are a live-forward ledger with a vintage archive, calibrated
+uncertainty in serving, and a public scoreboard against frozen open baselines.
 
 ## License and disclaimer
 
-MIT; see [LICENSE](https://github.com/tylergibbs1/surge/blob/main/LICENSE).
+MIT. See
+[LICENSE](https://github.com/tylergibbs1/surge/blob/main/LICENSE).
 
-Research and reference use only. **Not for trading, regulated bidding,
-dispatch, or bankability-grade decisions.** There is no SLA. Results from a
-historical hold-out may not generalize to future conditions or extreme events.
+Research and reference use only. **Do not use Surge for trading, regulated
+bidding, dispatch, or bankability-grade decisions.** There is no SLA. A result
+from a historical hold-out can fail to generalize to future conditions or to
+extreme events.
