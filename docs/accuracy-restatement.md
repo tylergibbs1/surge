@@ -92,10 +92,79 @@ Calibration closes the interval gap: canonical CQR holds every RTO within 1.6
 points of nominal across 2021, 2022, 2023 and the 2024 reporting half
 (`docs/adaptive-conformal-experiment.md`). It is not yet wired into serving.
 
+## The blend, and what it changes
+
+Two model families with different inductive biases landed within 0.04 points of
+each other on this cohort: Chronos-2 at 3.09% and a LightGBM baseline at 3.13%.
+That is the classic setup for a useful combination, and it is.
+
+On the untouched second half of 2024, blend weight fitted only on the first half
+(`artifacts/research/baseline-blend-2024.json`):
+
+| | mean MAPE |
+|---|---:|
+| Seasonal-naive (t-24) | 4.789 |
+| GBM baseline | 2.978 |
+| Chronos-2 zero-shot | 2.878 |
+| **Blend** | **2.717** |
+
+Every RTO improves over its own best single model, by 1.3% to 6.6%, and the
+optimal weight on Chronos sits between 0.34 and 0.64 everywhere -- neither model
+dominates. The macro gain over the best single model is 4.9%, which is larger
+than context length, the calendar-clock fix and the LoRA fine-tune produced
+combined.
+
+The operator, scored on those same hours, averages 2.855%. The blend is ahead of
+that, but **the lead-time caveat still applies and still cuts against Surge**, so
+this does not establish that Surge beats the operators. What it establishes is
+that the blend beats both of Surge's own models, robustly and on data that did
+not choose its weight.
+
+## ISO-NE is not a bug, and the gap is mostly physics
+
+ISNE is the worst RTO for both model families by a wide margin, which pointed at
+data or regime rather than architecture. It is regime.
+
+EIA-930's ISNE demand series is a **net load** series with several GW of
+unobservable, cloud-driven behind-the-meter PV subtracted from a system whose
+mean load is only about 13 GW. No other RTO in the fleet carries BTM PV that
+large relative to its own size. ISO-NE counted 134 "duck curve days" in 2025, up
+from 45 in 2022, and set a record-low net load of 5,318 MW in April 2025.
+
+The error is concentrated exactly where that predicts: midday hours are roughly
+29% of the sample but around 41% of ISNE's total absolute error, and collapsing
+midday to ISNE's own overnight rate would close most of the gap to the fleet.
+Retraining on recent data only, adding a time trend, or adding deterministic
+clear-sky irradiance all fail to help -- the residual is day-to-day cloud cover,
+which is not in the feature set at all and cannot be without an irradiance input.
+
+Three consequences worth stating plainly:
+
+- **4.86% for a calendar-only ISNE forecast is good, not broken.** An
+  independent reference LightGBM built for this diagnosis scored 6.36% on the
+  same task; both Surge models beat it by about 1.5 points.
+- **ISO-NE's 2.77% is not a fair target.** It is produced by an ensemble fed by
+  three weather vendors across 23 airports, three separate BTM-PV vendors, and a
+  staffed desk. The gap is the value of weather data and people, not a modelling
+  deficiency.
+- **Roughly 1.5 of the 2.1-point gap is midday BTM-solar variance that is
+  physically unobservable without an irradiance forecast.** That is a
+  quantified statement of what the no-future-weather constraint costs.
+
+ISNE also has the *highest* raw interval coverage of the seven RTOs. That is a
+symptom of the same diagnosis rather than a separate finding: its error is a
+broad, near-symmetric, high-variance weather term rather than rare fat tails, so
+intervals sized for that variance cover well. The point forecast is weak there
+and the uncertainty estimate is honest about it.
+
 ## What may be claimed today
 
 - Surge is competitive with published open load-forecasting baselines.
-- Surge is **not** currently better than RTO operators' own day-ahead forecasts.
+- Blending the foundation model with the open GBM baseline beats either alone by
+  4.9%, measured on data that did not choose the blend weight.
+- Surge is **not** established as better than RTO operators' own day-ahead
+  forecasts: the blend leads on identical hours, but Surge's lead time is
+  shorter, and `DF` is not comparable across BAs.
 - No locked-test accuracy claim exists for v0.2; that lane was consumed by a
   fail-closed error before any metric was produced.
 - Interval coverage claims require the calibration lane to ship first.
