@@ -279,7 +279,7 @@ def _join_ba(ba: str, *, with_gen: bool = True,
 # Number of correlated peer BAs whose PAST load is attached as a covariate.
 # Their history is observable at forecast time, so this is causal; only their
 # future would be off-limits. 0 disables.
-N_NEIGHBORS = 2
+N_NEIGHBORS = 4
 
 
 def _align_to(src_ts: np.ndarray, src_val: np.ndarray,
