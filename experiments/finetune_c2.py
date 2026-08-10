@@ -76,11 +76,21 @@ def main() -> None:
     # it. bd.val_end onwards is never shown to the trainer.
     inner_ends = {ba: max(bd.train_end - args.inner_val_hours, bd.train_end // 2)
                   for ba, bd in bas.items()}
-    train_inputs = [_task(bd, 0, inner_ends[ba]) for ba, bd in bas.items()]
-    val_inputs   = [_task(bd, 0, bd.train_end)   for bd in bas.values()]
+    # When the temperature channel is a real forecast, only the span with actual
+    # forecast coverage is usable: before it, `temp_fcst` falls back to observed
+    # temperature, and training there would teach the model to trust an exact
+    # value it will never receive at serve time — the very mismatch this channel
+    # exists to remove.
+    starts = {ba: (bd.fcst_start if args.future_mode in ("forecast", "analysis_only") else 0)
+              for ba, bd in bas.items()}
+    train_inputs = [_task(bd, starts[ba], inner_ends[ba]) for ba, bd in bas.items()]
+    val_inputs   = [_task(bd, starts[ba], bd.train_end)   for ba, bd in bas.items()]
+    span = {ba: inner_ends[ba] - starts[ba] for ba in bas}
     print(f"[data] train tasks: {len(train_inputs)} | val tasks: {len(val_inputs)} "
           f"| inner_val_hours={args.inner_val_hours} | val split (2024) held out",
           flush=True)
+    print(f"[data] train span hours: min={min(span.values()):,} max={max(span.values()):,} "
+          f"| forecast coverage starts at index {min(starts.values())}", flush=True)
 
     pipe = BaseChronosPipeline.from_pretrained(args.base, device_map="cuda",
                                                torch_dtype=torch.bfloat16)
