@@ -81,9 +81,28 @@ def hero_forecast() -> Path:
     for i in range(0, len(test_slice) - week_hours, 24):
         w = test_slice[i:i + week_hours].max()
         # Skip windows with suspicious SWPP gaps (min < 10% of typical)
-        swpp_w = bas["SWPP"].target[bas["SWPP"].val_end + i:
-                                      bas["SWPP"].val_end + i + week_hours]
-        if swpp_w.min() < 5_000:  # SWPP typical load > 20 GW
+        def _flatlined(series: np.ndarray, run: int = 8) -> bool:
+            """True if `run` or more consecutive hours are identical — the
+            signature of a forward-filled gap, which reads as a drawing error
+            in the hero chart even though the forecast is fine."""
+            if len(series) <= run:
+                return False
+            same = np.diff(series) == 0
+            best = cur = 0
+            for flag in same:
+                cur = cur + 1 if flag else 0
+                best = max(best, cur)
+            return best >= run - 1
+
+        bad_window = False
+        for other in BAS:
+            od = bas[other]
+            ow = od.target[od.val_end + i:od.val_end + i + week_hours]
+            if len(ow) < week_hours or _flatlined(ow):
+                bad_window = True
+                break
+        if bad_window or bas["SWPP"].target[bas["SWPP"].val_end + i:
+                                            bas["SWPP"].val_end + i + week_hours].min() < 5_000:
             continue
         if w > peak_val:
             peak_val = w
@@ -197,7 +216,7 @@ def leaderboard() -> Path:
     ax.set_yticks(y); ax.set_yticklabels(labels, fontsize=10)
     ax.invert_yaxis()
     ax.set_xlabel("Test MASE  (lower is better, 95% CI)", color=FG, fontsize=11)
-    ax.set_xlim(0, 2.4)
+    ax.set_xlim(0, 1.25)
     ax.set_title("Surge vs. baselines, 2025 hold-out — causal covariates only",
                  color=FG, fontsize=13, fontweight="bold", loc="left", pad=12)
     for i, m in enumerate(mase):
@@ -206,11 +225,11 @@ def leaderboard() -> Path:
     for s in ax.spines.values():
         s.set_color("#333")
     fig.text(0.01, 0.01,
-             "7 US RTOs, macro MASE, 365 rolling 24h-ahead windows over calendar 2025, "
-             "denominator = per-BA train seasonal-naive (m=24). No future weather or "
+             "7 US RTOs, macro MASE, 365 rolling 24h-ahead windows over calendar 2025.\n"
+             "Denominator = per-BA train seasonal-naive (m=24). No future weather or\n"
              "renewables except the labelled perfect-foresight bar.",
-             color=MUTED, fontsize=8.5)
-    fig.tight_layout(rect=[0, 0.03, 1, 1])
+             color=MUTED, fontsize=8.5, linespacing=1.5)
+    fig.tight_layout(rect=[0, 0.10, 1, 1])
     path = OUT / "leaderboard.png"
     fig.savefig(path, dpi=160)
     plt.close(fig)
@@ -280,16 +299,17 @@ def horizon_curve() -> Path:
 
     ax.set_xlabel("Forecast horizon  (hours ahead)", fontsize=11, color=FG)
     ax.set_ylabel("MASE  (lower = better)", fontsize=11, color=FG)
-    ax.set_xlim(0, 170); ax.set_ylim(0, 1.3)
+    ax.set_xlim(0, 170); ax.set_ylim(0, max(1.35, float(per_step.max()) * 1.08))
     ax.set_xticks([1, 24, 48, 72, 120, 168])
     ax.set_title("How far ahead can Surge predict before it loses to a naive baseline?",
                  color=FG, fontsize=13, fontweight="bold", loc="left", pad=10)
     ax.grid(True, alpha=0.25)
     for s in ax.spines.values():
         s.set_color("#333")
-    ax.legend(loc="upper left", frameon=False, labelcolor=FG, fontsize=10)
+    ax.legend(loc="lower right", frameon=False, labelcolor=FG, fontsize=10)
     fig.text(0.01, 0.01,
-             "Per-step MASE from a single h=168 forecast, macro over 7 BAs, 2024 val.",
+             "Per-step MASE from a single h=168 forecast, macro over 7 US RTOs, "
+             "2025 test split, causal covariates (no future weather).",
              color=MUTED, fontsize=8.5)
     fig.tight_layout(rect=[0, 0.03, 1, 1])
     path = OUT / "horizon_curve.png"

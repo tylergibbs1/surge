@@ -137,6 +137,8 @@ that silently grew past 2025. Full accounting in [#1](../../issues/1).
 
 ### 7-RTO subset (2025 hold-out, causal covariates)
 
+![Surge vs. classical and foundation baselines, causal covariates](docs/plots/leaderboard.png)
+
 | Model | Test MASE | vs. seasonal-naive-24 |
 |---|---:|---:|
 | seasonal-naive-24 (baseline) | 1.044 | — |
@@ -235,20 +237,25 @@ for the operator side, then `python -m experiments.run_c2 rto7
 
 ![Horizon degradation curve](docs/plots/horizon_curve.png)
 
-> **Stale.** This curve was generated under the superseded protocol
-> (perfect-foresight covariates, undeduplicated store, unpinned window), so
-> the ~70-hour crossover it shows is not trustworthy. It needs regenerating
-> before the claim is repeated. The same applies to
-> `docs/plots/leaderboard.png`, which is why that figure no longer appears
-> above.
+Per-step forecast skill crosses the seasonal-naive-24 line at **41 hours
+(≈1.7 days)**. Matched-horizon MASE:
 
-What can be said now: the model currently receives **no future weather at
-all**, because every causal temperature proxy tried so far scored worse than
-withholding temperature — including flat persistence, which is what the live
-API still sends and which is measurably *harmful* (RTO MASE 0.740 with it
-versus 0.594 without). The cause is a train/serve mismatch: the checkpoint
-was fine-tuned with exact temperature over the horizon, so it treats the
-covariate as reliable and an imprecise stand-in misleads it.
+| horizon | 1 h | 6 h | 24 h | 72 h | 168 h |
+|---|---:|---:|---:|---:|---:|
+| MASE | 0.213 | 0.305 | 0.572 | 0.901 | 1.202 |
+
+An earlier version of this section claimed a ~70-hour (2.9-day) crossover.
+That figure came from the leaky protocol; measured causally the useful
+horizon is roughly **half** what was advertised, and by one week ahead the
+model is worse than "same as last week" (MASE 1.202).
+
+The model currently receives **no future weather at all**, because every
+causal temperature proxy tried so far scored worse than withholding
+temperature — including flat persistence, which is what the live API still
+sends and which is measurably *harmful* (RTO MASE 0.740 with it versus 0.594
+without). The cause is a train/serve mismatch: the checkpoint was fine-tuned
+with exact temperature over the horizon, so it treats the covariate as
+reliable and an imprecise stand-in misleads it.
 
 Closing the 0.572 → 0.468 perfect-foresight gap therefore needs a *genuine*
 weather forecast — real HRRR/GFS archives (`surge.scrapers.hrrr` exists but
@@ -294,8 +301,6 @@ figures are upper bounds rather than achievable forecasts.
       MASE denominator for BANC, SPA, LGEE, SEC, TEPC)
 - [ ] Stop sending flat persistence temperature from the live API; it scores
       worse than sending no future temperature
-- [ ] Regenerate docs/plots/{leaderboard,horizon_curve}.png under the
-      causal protocol
 - [ ] Conformal calibration — the nominal 80% band covers ~76%
 - [ ] Phase 2: LMP forecasting task, Hugging Face dataset release
 - [ ] Phase 3: scenario simulator (surge-sim)
