@@ -90,10 +90,23 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-FUTURE_MODES = ("persistence", "none", "oracle")
+FUTURE_MODES = ("persistence", "lag24", "none", "oracle")
 
 CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
                  "is_weekend", "is_holiday")
+
+
+def _lag_idx(origin: int, horizon: int, n: int, lag: int = 24) -> np.ndarray:
+    """Indices of the same-hour-yesterday profile for [origin, origin+horizon).
+
+    Every returned index is strictly < `origin`, so this is observable at
+    forecast time. When the horizon runs past the lag, the most recent
+    available day is tiled forward rather than reaching into the future.
+    """
+    idx = np.arange(origin, origin + horizon) - lag
+    while idx.max(initial=-1) >= origin:
+        idx = np.where(idx >= origin, idx - lag, idx)
+    return np.clip(idx, 0, n - 1)
 
 
 def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
@@ -110,6 +123,10 @@ def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
         policy["temp_c"] = "persistence"
         # Actual renewable generation is not knowable at forecast time and the
         # production API does not supply it, so it stays history-only.
+        for c in gen_cols:
+            policy[c] = "past_only"
+    elif mode == "lag24":
+        policy["temp_c"] = "lag24"
         for c in gen_cols:
             policy[c] = "past_only"
     else:  # "none"
@@ -163,6 +180,8 @@ class BAData:
             elif pol == "persistence":
                 last = v[origin - 1] if origin > 0 else v[0]
                 out[k] = np.full(horizon, last, dtype=v.dtype)
+            elif pol == "lag24":
+                out[k] = v[_lag_idx(origin, horizon, len(v))]
             else:
                 raise ValueError(f"unknown policy {pol!r} for {k!r}")
         return out
@@ -177,6 +196,8 @@ class BAData:
         v = self.covariates["temp_c"]
         if pol == "oracle":
             return v[origin:origin + horizon]
+        if pol == "lag24":
+            return v[_lag_idx(origin, horizon, len(v))]
         last = v[origin - 1] if origin > 0 else v[0]
         # Under "persistence" this is exactly what the Chronos models receive.
         # Under "none" the Chronos models get no temperature at all, while these
