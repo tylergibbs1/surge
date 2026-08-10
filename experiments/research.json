@@ -1,20 +1,22 @@
 {
-  "tag": "honest-accuracy-aug10",
-  "goal": "Lower day-ahead 24h load-forecast MASE across all 53 EIA-930 BAs using only information a forecaster genuinely has at forecast time. Improvements must generalise, not just fit the validation split.",
+  "tag": "real-weather-forecasts-aug10",
+  "goal": "Recover the perfect-foresight gap using REAL archived day-ahead weather forecasts as a causal future covariate. Honest RTO-7 test MASE is 0.572; the oracle (perfect weather + renewables) ceiling is 0.468. Close at least half that gap without leakage and without degrading held-out BAs.",
   "metric": "mase",
   "metric_direction": "lower",
   "baseline": {
-    "note": "Measured on validation (calendar 2024), all 53 BAs, causal covariates.",
-    "surge_fm_v3_none": 0.6091,
-    "surge_fm_v3_persistence": 0.6287,
-    "chronos2_zeroshot_none": 0.6346,
-    "chronos2_zeroshot_persistence": 0.6509
+    "note": "7 RTOs, 2025 test split, causal covariates, deduplicated store.",
+    "no_future_weather": 0.5937,
+    "plus_peer_covariates": 0.5804,
+    "plus_causal_readaptation": 0.572,
+    "chronos2_zeroshot_plus_peers": 0.5908,
+    "oracle_ceiling_not_a_forecast": 0.4683
   },
-  "target": 0.57,
+  "target": 0.52,
   "success": {
-    "beat_v3_none_by_pct": 5,
-    "max_holdout_gap_regression": 0.02,
-    "note": "A candidate only counts if it improves `mase` AND does not worsen `holdout_gap` by more than 0.02. A win on tuned BAs paid for by held-out BAs is overfitting, not progress."
+    "primary": "RTO-7 test MASE <= 0.52 (>= 50% of the 0.572 -> 0.468 gap closed)",
+    "stretch": "<= 0.50",
+    "must_not_regress": "holdout_gap worse by more than 0.02; cov_pi80 below 0.75",
+    "must_beat": "Chronos-2 zero-shot given the SAME forecast covariates \u2014 otherwise the gain belongs to the covariate, not to surge."
   },
   "run_command": "bash scripts/run_remote_experiment.sh $EXP_NAME $CONFIG_JSON",
   "eval_contract": {
@@ -39,53 +41,71 @@
     "src/surge/scrapers/asos.py"
   ],
   "hard_constraints": [
-    "Never use realized future values as future covariates. temp_c is observed ASOS data and wind_mw/solar_mw are EIA actual generation; none are knowable at forecast time. The causal guard enforces this by perturbing post-origin actuals and requiring the future covariates not to move.",
-    "Never score on the test split during search. Optimise validation only.",
-    "Do not tune the MASE denominator, the split boundaries, or the eval window to flatter a result.",
-    "Report a candidate as an improvement only when the held-out-BA score moves with the tuned score."
+    "The forecast covariate at hour t must be the value forecast at or before t-horizon. Never substitute the observed series or the reanalysis - that is the oracle leak.",
+    "Train and serve on the SAME covariate kind. Training on observed temperature and serving a forecast is the train/serve mismatch that made every causal proxy lose to withholding temperature entirely.",
+    "Because the forecast archive starts 2021-03, retrain on 2021-2023 and keep val=2024 and test=2025 unchanged so results stay comparable to results.tsv.",
+    "Never score on test during search. Validation only; one final confirmation.",
+    "Always report Chronos-2 zero-shot with the same covariates as the control."
   ],
   "ideas": [
     {
-      "id": "diurnal_temp_proxy",
+      "id": "forecast_temp_covariate",
       "priority": 1,
-      "rationale": "Measured: a flat persistence temperature is WORSE than supplying no future temperature (RTO-7 test MASE 0.7395 vs 0.5937), because a constant 24h temperature implies no diurnal cycle and the checkpoint was trained to trust real temperature. A causal proxy that preserves diurnal shape should recover much of the 0.084 MASE that oracle temperature was worth.",
-      "try": "future temp_c = same-hour-yesterday (lag 24) profile; or train-set hour-of-day x day-of-year climatology; or yesterday's shape re-anchored to the last observed value; or a damped blend of climatology and persistence."
+      "rationale": "Day-ahead forecast temp has MAE ~1.3C and corr ~0.99 against the analysis, so it should capture most of the 0.084 MASE that oracle temperature was worth. This is the single largest measured lever.",
+      "try": "ingest temperature_2m_previous_day1 for the 7 RTO centroids 2021-03..2026-04; declare it known-future; retrain so the model learns to trust it appropriately."
     },
     {
-      "id": "neighbor_ba_load",
+      "id": "forecast_renewables",
       "priority": 2,
-      "rationale": "Chronos-2 uses group attention for cross-series in-context learning. A neighbouring BA's PAST load is observable at forecast time, so it is causal. Likely to help small BAs most, which is where the 53-BA macro is weakest.",
-      "try": "add correlated neighbour BA load as past covariates, chosen by interconnect or by train-split correlation; keep them past-only."
+      "rationale": "Oracle wind/solar was worth a further 0.043 MASE. Open-Meteo exposes shortwave radiation and 100m wind speed as forecast variables, which proxy solar and wind output causally.",
+      "try": "add shortwave_radiation_previous_day1 and wind_speed_100m_previous_day1."
     },
     {
-      "id": "lora_not_full_finetune",
+      "id": "asos_backfill_46",
       "priority": 2,
-      "rationale": "surge-fm-v3 is a FULL fine-tune over only 53 series and beats zero-shot by ~4% honestly. Literature reports full fine-tuning of Chronos degrading vs LoRA on small/noisy datasets, with LoRA's low-rank constraint acting as regularisation and recommended below ~10k series.",
-      "try": "LoRA r=8 alpha=16 on q,k,v,o and output_patch_embedding; lr 2e-5; early stopping on validation with patience; compare against full fine-tune at equal budget."
+      "rationale": "46 of 53 BAs have zero-filled weather. Forecast covariates can cover all 53 from Open-Meteo centroids without needing the ASOS backfill at all.",
+      "try": "fetch forecast temp for all 53 BA centroids, not just the RTOs."
     },
     {
-      "id": "robust_outlier_filter",
-      "priority": 2,
-      "rationale": "The current filter clips only load_mw > 200000, a global threshold. BANC has a 70 GW spike against a 1.8 GW median, inflating its MASE denominator ~60x. Five BAs affected (BANC, SPA, LGEE, SEC, TEPC). This corrupts training targets as well as the denominator.",
-      "try": "per-BA robust rejection (rolling median absolute deviation, or a multiple of the BA's own median/quantile) instead of an absolute cutoff."
-    },
-    {
-      "id": "conformal_calibration",
+      "id": "continuous_retraining",
       "priority": 3,
-      "rationale": "The nominal 80% interval covers only 71-73% (and 59% under the flat-temp path), so the probabilistic output is overconfident. Conformalized quantile regression on an independent calibration split restores coverage and often tightens intervals.",
-      "try": "split-conformal / CQR adjustment fitted on validation, applied to the quantile heads. Track cov_pi80 and crps; this targets calibration, not MASE."
+      "rationale": "Measured 8% degradation from Jan-Apr 2025 to Jan-Apr 2026 for both surge and zero-shot. Literature (arXiv 2607.15705) finds continuous retraining materially important and commonly overlooked.",
+      "try": "rolling monthly LoRA re-adaptation; 37s per run makes this nearly free."
     },
     {
-      "id": "context_and_ensemble",
+      "id": "tabpfn_ts",
       "priority": 3,
-      "rationale": "Cheap, low-risk capacity levers that rarely overfit.",
-      "try": "context 1024/2048/4096; multi-seed or multi-checkpoint ensembling of quantiles; recency-weighted fine-tuning sampling."
+      "rationale": "TabPFN-TS (11M params) claims SOTA on covariate-informed forecasting on GIFT-Eval and fev-bench, and reportedly captures simple covariate-target relations better than Chronos-2 at short horizons.",
+      "try": "evaluate with identical covariates; consider cross-family output ensembling."
+    },
+    {
+      "id": "public_benchmark",
+      "priority": 3,
+      "rationale": "SOTA cannot be claimed on a self-defined BA set with a self-computed denominator. Needs a benchmark with published numbers.",
+      "try": "GEFCom2014-L (probabilistic, pinball loss), fev-bench/GIFT-Eval covariate tracks, or the frozen German live-challenge leaderboard (arXiv 2608.05018)."
     }
   ],
   "timeout_seconds": 1800,
   "no_new_dependencies": false,
   "stop_conditions": {
-    "wall_clock_minutes": 240,
+    "wall_clock_minutes": 360,
     "no_improvement_streak": 6
+  },
+  "measured_inputs": {
+    "weather_forecast_source": "Open-Meteo Previous Runs API, temperature_2m_previous_day1 (GFS seamless) \u2014 the forecast issued ~24h before valid time",
+    "archive_start": "2021-03 for GFS 2m temperature; ~2024-01 for most other models",
+    "day_ahead_forecast_skill_2025": {
+      "mae_degC": {
+        "PJM": 1.3,
+        "CISO": 1.06,
+        "ERCO": 1.25,
+        "MISO": 1.38,
+        "NYIS": 1.31,
+        "ISNE": 1.55,
+        "SWPP": 1.22
+      },
+      "corr": "0.983 - 0.990",
+      "bias_degC": "-0.40 .. +0.20"
+    }
   }
 }
