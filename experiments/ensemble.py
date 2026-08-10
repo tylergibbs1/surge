@@ -25,7 +25,7 @@ def ensemble_forecast(pipes, bas, on, context, horizon, batch_size,
     all_win_mase = []
     for ba, bd in bas.items():
         start = bd.train_end if on == "val" else bd.val_end
-        end = bd.val_end if on == "val" else len(bd.target)
+        end = bd.val_end if on == "val" else bd.test_end
         origins = [o for o in range(start, end - horizon + 1, horizon)
                    if o - context >= 0]
         if not origins:
@@ -41,7 +41,7 @@ def ensemble_forecast(pipes, bas, on, context, horizon, batch_size,
                 tasks = []
                 for o in batch_origins:
                     past = {k: v[o - context:o] for k, v in bd.covariates.items()}
-                    future = {k: bd.covariates[k][o:o + horizon] for k in bd.future_keys}
+                    future = bd.future_at(o, horizon)
                     tasks.append({
                         "target": bd.target[o - context:o].astype(np.float32),
                         "past_covariates": past,
@@ -107,7 +107,8 @@ def ensemble_forecast(pipes, bas, on, context, horizon, batch_size,
 
 def main() -> None:
     cfg = json.loads(sys.argv[1])
-    bas = load_multi_ba(cfg["bas"], with_gen=cfg.get("with_gen", False))
+    bas = load_multi_ba(cfg["bas"], with_gen=cfg.get("with_gen", False),
+                        future_mode=cfg.get("future_mode", "persistence"))
     pipes = []
     for p in cfg["paths"]:
         pipe = BaseChronosPipeline.from_pretrained(p, device_map="cuda", torch_dtype=torch.bfloat16)

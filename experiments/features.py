@@ -4,13 +4,36 @@ Returned layout per BA:
     {
       "target":           np.ndarray[T] load in MW,
       "past_covariates":  {name: np.ndarray[T]},
-      "future_keys":      set[str]  # covariates known into the future
+      "future_keys":      set[str]  # covariates supplied over the horizon
     }
 
-`future_keys` contains the covariate names that are deterministic or
-assumed-known-at-forecast-time:
-    temp_c  (assumes perfect weather forecast — upper-bound)
-    hour_sin, hour_cos, dow_sin, dow_cos, is_weekend, is_holiday
+Covariate futures: what a forecaster may legitimately know
+----------------------------------------------------------
+Every covariate carries a *policy* saying how its values over the forecast
+horizon are produced. This matters because the underlying series are all
+**realized observations** — `temp_c` is observed ASOS station data (Iowa
+Mesonet), and `wind_mw`/`solar_mw` are EIA-930 *actual* generation. Slicing
+them over the forecast window and passing them as future covariates leaks the
+future into the input.
+
+Policies:
+    known        deterministic from the timestamp alone — calendar features.
+                 No leakage.
+    persistence  held flat at the last value observed before the forecast
+                 origin. This is a real, causal forecast, and it is what the
+                 production API does (see surge.api.forecaster).
+    oracle       realized future values, i.e. perfect foresight. Leaks. Only
+                 valid as an explicitly-labelled upper bound, never as a
+                 headline number or in a comparison against a real forecaster.
+    past_only    supplied as history only, never over the horizon.
+
+`future_mode` picks the policy set for the non-calendar covariates:
+    "persistence"  temp_c=persistence, wind/solar=past_only   (default; causal)
+    "none"         temp_c=past_only,   wind/solar=past_only
+    "oracle"       temp_c=oracle,      wind/solar=oracle       (leaky; opt-in)
+
+Because `persistence` depends on the forecast origin, future covariates cannot
+be precomputed as a flat array — call `BAData.future_at(origin, horizon)`.
 """
 from __future__ import annotations
 
@@ -67,16 +90,56 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
+FUTURE_MODES = ("persistence", "none", "oracle")
+
+CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
+                 "is_weekend", "is_holiday")
+
+
+def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
+    """Covariate name -> policy, for a given `future_mode`."""
+    if mode not in FUTURE_MODES:
+        raise ValueError(f"future_mode must be one of {FUTURE_MODES}, got {mode!r}")
+
+    policy = {k: "known" for k in CALENDAR_KEYS}
+    if mode == "oracle":
+        policy["temp_c"] = "oracle"
+        for c in gen_cols:
+            policy[c] = "oracle"
+    elif mode == "persistence":
+        policy["temp_c"] = "persistence"
+        # Actual renewable generation is not knowable at forecast time and the
+        # production API does not supply it, so it stays history-only.
+        for c in gen_cols:
+            policy[c] = "past_only"
+    else:  # "none"
+        policy["temp_c"] = "past_only"
+        for c in gen_cols:
+            policy[c] = "past_only"
+    return policy
+
+
 @dataclass
 class BAData:
     ba: str
     ts_utc: np.ndarray                   # (T,) datetime64
     target: np.ndarray                   # (T,) load MW
     covariates: dict[str, np.ndarray]    # each (T,)
-    future_keys: list[str]
+    future_policy: dict[str, str]        # covariate name -> policy
+    future_mode: str
     train_end: int
     val_end: int
+    test_end: int
     denom_mae: float
+
+    @property
+    def future_keys(self) -> list[str]:
+        """Covariates supplied over the horizon (any policy but past_only)."""
+        return sorted(k for k, p in self.future_policy.items() if p != "past_only")
+
+    @property
+    def leaks_future(self) -> bool:
+        return any(p == "oracle" for p in self.future_policy.values())
 
     def slice(self, start: int, end: int) -> dict:
         return {
@@ -84,12 +147,52 @@ class BAData:
             "past_covariates": {k: v[start:end] for k, v in self.covariates.items()},
         }
 
-    def future_dict(self, start: int, end: int) -> dict[str, np.ndarray]:
-        return {k: self.covariates[k][start:end] for k in self.future_keys}
+    def future_at(self, origin: int, horizon: int) -> dict[str, np.ndarray]:
+        """Future covariates for the window [origin, origin+horizon), per policy.
+
+        `origin` is the first *forecast* index; everything at index < origin is
+        observable. Under `persistence` the value is frozen at origin-1.
+        """
+        out: dict[str, np.ndarray] = {}
+        for k, pol in self.future_policy.items():
+            if pol == "past_only":
+                continue
+            v = self.covariates[k]
+            if pol in ("known", "oracle"):
+                out[k] = v[origin:origin + horizon]
+            elif pol == "persistence":
+                last = v[origin - 1] if origin > 0 else v[0]
+                out[k] = np.full(horizon, last, dtype=v.dtype)
+            else:
+                raise ValueError(f"unknown policy {pol!r} for {k!r}")
+        return out
+
+    def temp_at(self, origin: int, horizon: int) -> np.ndarray:
+        """Temperature over the horizon under this BA's policy.
+
+        Lets the classical baselines consume weather on the same terms as the
+        foundation models, so the leaderboard stays like-for-like.
+        """
+        pol = self.future_policy.get("temp_c", "past_only")
+        v = self.covariates["temp_c"]
+        if pol == "oracle":
+            return v[origin:origin + horizon]
+        last = v[origin - 1] if origin > 0 else v[0]
+        # Under "persistence" this is exactly what the Chronos models receive.
+        # Under "none" the Chronos models get no temperature at all, while these
+        # baselines have temp baked in as a trained feature and need *some*
+        # value — persistence is the weakest causal stand-in, so "none" leaves
+        # the baselines marginally advantaged. Compare on "persistence".
+        return np.full(horizon, last, dtype=v.dtype)
 
 
-def _join_ba(ba: str, *, with_gen: bool = True) -> BAData:
-    load = (store.scan("load_hourly")
+def _join_ba(ba: str, *, with_gen: bool = True,
+             future_mode: str = "persistence") -> BAData:
+    # Dedupe on the business key: the store is append-only, so overlapping
+    # backfill windows and EIA in-place revisions leave several rows per hour.
+    # Without this the target series carries repeated hours, which silently
+    # breaks the lag/seasonal-naive arithmetic and the split indices.
+    load = (store.scan("load_hourly", dedupe_on=["ts_utc", "ba"])
               .filter(pl.col("ba") == ba)
               .select("ts_utc", "load_mw")
               .sort("ts_utc")
@@ -97,7 +200,7 @@ def _join_ba(ba: str, *, with_gen: bool = True) -> BAData:
     load = load.with_columns(
         pl.when(pl.col("load_mw") > 200_000).then(None).otherwise(pl.col("load_mw")).alias("load_mw")
     )
-    weather = (store.scan("weather_hourly")
+    weather = (store.scan("weather_hourly", dedupe_on=["ts_utc", "ba"])
                  .filter(pl.col("ba") == ba)
                  .select("ts_utc", "temp_c")
                  .sort("ts_utc")
@@ -105,7 +208,7 @@ def _join_ba(ba: str, *, with_gen: bool = True) -> BAData:
     j = load.join(weather, on="ts_utc", how="left")
 
     if with_gen:
-        gen = (store.scan("gen_by_fuel")
+        gen = (store.scan("gen_by_fuel", dedupe_on=["ts_utc", "ba", "fuel"])
                  .filter(pl.col("ba") == ba)
                  .filter(pl.col("fuel").is_in(["WND", "SUN"]))
                  .group_by(["ts_utc", "fuel"])
@@ -123,32 +226,36 @@ def _join_ba(ba: str, *, with_gen: bool = True) -> BAData:
     cal = _calendar(ts)
 
     covariates: dict[str, np.ndarray] = {"temp_c": temp, **cal}
-    future_keys = ["temp_c", *cal.keys()]
+    gen_cols: list[str] = []
 
     if with_gen:
         for col in ("wind_mw", "solar_mw"):
             if col in j.columns:
                 v = _ffill_np(j[col].to_numpy().astype(np.float64))
                 covariates[col] = v.astype(np.float32)
-                # Wind/solar are *assumed-known-at-forecast-time* (i.e., using a perfect
-                # renewable forecast). Production would substitute a forecast series.
-                future_keys.append(col)
+                gen_cols.append(col)
 
-    future_keys = sorted(set(future_keys))
+    future_policy = _resolve_policy(future_mode, gen_cols)
 
     years = j["ts_utc"].dt.year().to_numpy()
     train_end = int(np.searchsorted(years, 2024, side="left"))
     val_end   = int(np.searchsorted(years, 2025, side="left"))
+    # The test split is calendar 2025, closed at the top. Without this bound it
+    # would run to the end of the store, so every fresh ingest would silently
+    # redefine "test MASE" and published numbers would stop being comparable.
+    test_end  = int(np.searchsorted(years, 2026, side="left"))
 
     train = target[:train_end]
     denom = float(np.nanmean(np.abs(train[24:] - train[:-24])))
 
     return BAData(
         ba=ba, ts_utc=ts, target=target.astype(np.float32),
-        covariates=covariates, future_keys=future_keys,
-        train_end=train_end, val_end=val_end, denom_mae=denom,
+        covariates=covariates, future_policy=future_policy, future_mode=future_mode,
+        train_end=train_end, val_end=val_end, test_end=test_end, denom_mae=denom,
     )
 
 
-def load_multi_ba(bas: list[str], *, with_gen: bool = True) -> dict[str, BAData]:
-    return {ba: _join_ba(ba, with_gen=with_gen) for ba in bas}
+def load_multi_ba(bas: list[str], *, with_gen: bool = True,
+                  future_mode: str = "persistence") -> dict[str, BAData]:
+    return {ba: _join_ba(ba, with_gen=with_gen, future_mode=future_mode)
+            for ba in bas}

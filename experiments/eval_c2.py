@@ -36,7 +36,7 @@ def rolling_eval_c2(
 
     for ba, bd in bas.items():
         eval_start = bd.train_end if on == "val" else bd.val_end
-        eval_end   = bd.val_end   if on == "val" else len(bd.target)
+        eval_end   = bd.val_end   if on == "val" else bd.test_end
 
         origins = [o for o in range(eval_start, eval_end - horizon + 1, step)
                    if o - context >= 0]
@@ -57,7 +57,7 @@ def rolling_eval_c2(
             truths = []
             for o in batch_origins:
                 past = {k: v[o - context:o] for k, v in bd.covariates.items()}
-                future = {k: bd.covariates[k][o:o + horizon] for k in bd.future_keys}
+                future = bd.future_at(o, horizon)
                 tasks.append({
                     "target": bd.target[o - context:o].astype(np.float32),
                     "past_covariates": past,

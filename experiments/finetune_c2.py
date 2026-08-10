@@ -56,12 +56,16 @@ def main() -> None:
     ap.add_argument("--num-steps", type=int, default=2000)
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--seed", type=int, default=42)
+    # Must match the eval mode: this decides which covariates the checkpoint
+    # declares as known-future, so training and serving agree on the schema.
+    ap.add_argument("--future-mode", default="persistence",
+                    choices=["persistence", "none", "oracle"])
     ap.add_argument("--out", type=str, required=True)
     args = ap.parse_args()
     print(f"[args] {vars(args)}", flush=True)
     set_seed(args.seed)
 
-    bas = load_multi_ba(args.bas)
+    bas = load_multi_ba(args.bas, future_mode=args.future_mode)
     print(f"[data] loaded BAs: {list(bas)}", flush=True)
 
     train_inputs = [_task(bd, 0, bd.train_end) for bd in bas.values()]

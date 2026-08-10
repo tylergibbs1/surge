@@ -1,27 +1,91 @@
 {
-  "tag": "apr18",
-  "goal": "Minimise MASE on 2025 PJM hourly load test set, 24h-ahead forecasts.",
+  "tag": "honest-accuracy-aug10",
+  "goal": "Lower day-ahead 24h load-forecast MASE across all 53 EIA-930 BAs using only information a forecaster genuinely has at forecast time. Improvements must generalise, not just fit the validation split.",
   "metric": "mase",
   "metric_direction": "lower",
-  "target": 0.31,
-  "success": {
-    "beat_seasonal_naive_by_pct": 40,
-    "finetune_over_zeroshot_by_pct": 5
+  "baseline": {
+    "note": "Measured on validation (calendar 2024), all 53 BAs, causal covariates.",
+    "surge_fm_v3_none": 0.6091,
+    "surge_fm_v3_persistence": 0.6287,
+    "chronos2_zeroshot_none": 0.6346,
+    "chronos2_zeroshot_persistence": 0.6509
   },
-  "run_command": "ssh -p 13064 -i ~/.ssh/id_ed25519 root@103.207.149.110 'cd /workspace/surge && SURGE_DATA_DIR=/workspace/data python -m experiments.run $EXP_NAME $CONFIG_JSON'",
+  "target": 0.57,
+  "success": {
+    "beat_v3_none_by_pct": 5,
+    "max_holdout_gap_regression": 0.02,
+    "note": "A candidate only counts if it improves `mase` AND does not worsen `holdout_gap` by more than 0.02. A win on tuned BAs paid for by held-out BAs is overfitting, not progress."
+  },
+  "run_command": "bash scripts/run_remote_experiment.sh $EXP_NAME $CONFIG_JSON",
+  "eval_contract": {
+    "entrypoint": "experiments.research_eval",
+    "split": "validation (calendar 2024). Test (2025) is reserved for a single final confirmation via {\"confirm\": true}.",
+    "objective_field": "mase",
+    "generalisation_field": "holdout_gap",
+    "rejects": "future_mode='oracle', and any setup whose future covariates change when post-origin actuals are perturbed"
+  },
   "modifiable_files": [
+    "experiments/features.py",
+    "experiments/eval_c2.py",
     "experiments/models.py",
-    "experiments/run.py",
-    "experiments/eval.py"
+    "experiments/finetune_c2.py",
+    "experiments/ensemble.py"
   ],
   "readonly_files": [
+    "experiments/causal_guard.py",
+    "experiments/research_eval.py",
     "src/surge/store.py",
-    "src/surge/scrapers/eia.py"
+    "src/surge/scrapers/eia.py",
+    "src/surge/scrapers/asos.py"
   ],
-  "timeout_seconds": 1200,
+  "hard_constraints": [
+    "Never use realized future values as future covariates. temp_c is observed ASOS data and wind_mw/solar_mw are EIA actual generation; none are knowable at forecast time. The causal guard enforces this by perturbing post-origin actuals and requiring the future covariates not to move.",
+    "Never score on the test split during search. Optimise validation only.",
+    "Do not tune the MASE denominator, the split boundaries, or the eval window to flatter a result.",
+    "Report a candidate as an improvement only when the held-out-BA score moves with the tuned score."
+  ],
+  "ideas": [
+    {
+      "id": "diurnal_temp_proxy",
+      "priority": 1,
+      "rationale": "Measured: a flat persistence temperature is WORSE than supplying no future temperature (RTO-7 test MASE 0.7395 vs 0.5937), because a constant 24h temperature implies no diurnal cycle and the checkpoint was trained to trust real temperature. A causal proxy that preserves diurnal shape should recover much of the 0.084 MASE that oracle temperature was worth.",
+      "try": "future temp_c = same-hour-yesterday (lag 24) profile; or train-set hour-of-day x day-of-year climatology; or yesterday's shape re-anchored to the last observed value; or a damped blend of climatology and persistence."
+    },
+    {
+      "id": "neighbor_ba_load",
+      "priority": 2,
+      "rationale": "Chronos-2 uses group attention for cross-series in-context learning. A neighbouring BA's PAST load is observable at forecast time, so it is causal. Likely to help small BAs most, which is where the 53-BA macro is weakest.",
+      "try": "add correlated neighbour BA load as past covariates, chosen by interconnect or by train-split correlation; keep them past-only."
+    },
+    {
+      "id": "lora_not_full_finetune",
+      "priority": 2,
+      "rationale": "surge-fm-v3 is a FULL fine-tune over only 53 series and beats zero-shot by ~4% honestly. Literature reports full fine-tuning of Chronos degrading vs LoRA on small/noisy datasets, with LoRA's low-rank constraint acting as regularisation and recommended below ~10k series.",
+      "try": "LoRA r=8 alpha=16 on q,k,v,o and output_patch_embedding; lr 2e-5; early stopping on validation with patience; compare against full fine-tune at equal budget."
+    },
+    {
+      "id": "robust_outlier_filter",
+      "priority": 2,
+      "rationale": "The current filter clips only load_mw > 200000, a global threshold. BANC has a 70 GW spike against a 1.8 GW median, inflating its MASE denominator ~60x. Five BAs affected (BANC, SPA, LGEE, SEC, TEPC). This corrupts training targets as well as the denominator.",
+      "try": "per-BA robust rejection (rolling median absolute deviation, or a multiple of the BA's own median/quantile) instead of an absolute cutoff."
+    },
+    {
+      "id": "conformal_calibration",
+      "priority": 3,
+      "rationale": "The nominal 80% interval covers only 71-73% (and 59% under the flat-temp path), so the probabilistic output is overconfident. Conformalized quantile regression on an independent calibration split restores coverage and often tightens intervals.",
+      "try": "split-conformal / CQR adjustment fitted on validation, applied to the quantile heads. Track cov_pi80 and crps; this targets calibration, not MASE."
+    },
+    {
+      "id": "context_and_ensemble",
+      "priority": 3,
+      "rationale": "Cheap, low-risk capacity levers that rarely overfit.",
+      "try": "context 1024/2048/4096; multi-seed or multi-checkpoint ensembling of quantiles; recency-weighted fine-tuning sampling."
+    }
+  ],
+  "timeout_seconds": 1800,
   "no_new_dependencies": false,
   "stop_conditions": {
-    "wall_clock_minutes": 90,
-    "no_improvement_streak": 3
+    "wall_clock_minutes": 240,
+    "no_improvement_streak": 6
   }
 }

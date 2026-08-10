@@ -28,19 +28,25 @@ warnings.filterwarnings("ignore")
 
 
 # --- Feature builder (shared across baselines) ----------------------------
-def features_for_hour(bd: BAData, target_idx: int, lags: tuple[int, ...] = (24, 48, 168)) -> np.ndarray:
+def features_for_hour(bd: BAData, target_idx: int, lags: tuple[int, ...] = (24, 48, 168),
+                      temp: float | None = None) -> np.ndarray:
     """Returns a feature vector at absolute index `target_idx`.
 
     Features:
         y_{t-24}, y_{t-48}, y_{t-168}   (lag load)
-        temp_t                           (assumed-known-at-forecast-time)
+        temp_t                           (see `temp` below)
         hour_sin, hour_cos, dow_sin, dow_cos, is_weekend, is_holiday
         month (1..12)
+
+    `temp` overrides the temperature feature. Training passes None (realized
+    history, which is legitimate); evaluation must pass the value the BA's
+    covariate policy allows at forecast time — see `BAData.temp_at` — so this
+    baseline gets weather on exactly the same terms as the Chronos models.
     """
     feats = []
     for lag in lags:
         feats.append(bd.target[target_idx - lag] if target_idx - lag >= 0 else 0.0)
-    feats.append(bd.covariates["temp_c"][target_idx])
+    feats.append(bd.covariates["temp_c"][target_idx] if temp is None else temp)
     for k in ("hour_sin", "hour_cos", "dow_sin", "dow_cos", "is_weekend", "is_holiday"):
         feats.append(bd.covariates[k][target_idx])
     # Month from timestamp
@@ -89,17 +95,19 @@ def xgb_hourly_eval(bd: BAData, on: str, horizon: int = 24, step: int = 24,
         models[h] = m
 
     eval_start = bd.train_end if on == "val" else bd.val_end
-    eval_end = bd.val_end if on == "val" else len(bd.target)
+    eval_end = bd.val_end if on == "val" else bd.test_end
     abs_errs = []
     win_abs = []
 
     for origin in range(eval_start, eval_end - horizon + 1, step):
         preds, trues = [], []
+        # Weather over the horizon on the same terms the Chronos models get.
+        temp_fut = bd.temp_at(origin, horizon)
         for h in range(horizon):
             i = origin + h
             if i < 24:
                 continue
-            x = features_for_hour(bd, i).reshape(1, -1)
+            x = features_for_hour(bd, i, temp=float(temp_fut[h])).reshape(1, -1)
             # For multi-step, use actual lags (still in the past relative to origin).
             hour_of_day = int(bd.ts_utc[i].astype("datetime64[h]").astype(int) % 24)
             model = models.get(hour_of_day)
@@ -138,13 +146,21 @@ def prophet_eval(bd: BAData, on: str, horizon: int = 24, step: int = 24):
     m.fit(df_tr)
 
     eval_start = bd.train_end if on == "val" else bd.val_end
-    eval_end = bd.val_end if on == "val" else len(bd.target)
+    eval_end = bd.val_end if on == "val" else bd.test_end
     abs_errs = []
     win_abs = []
 
-    # Predict the whole eval range once, faster than per-origin.
+    # Predict the whole eval range once, faster than per-origin. The temp
+    # regressor is filled per forecast window under the BA's covariate policy,
+    # so Prophet sees no more future weather than the Chronos models do.
     ts_ev = pd.to_datetime(bd.ts_utc[eval_start:eval_end])
-    temp_ev = bd.covariates["temp_c"][eval_start:eval_end]
+    temp_src = bd.covariates["temp_c"]
+    temp_ev = np.full(eval_end - eval_start,
+                      temp_src[eval_start - 1] if eval_start > 0 else temp_src[0],
+                      dtype=temp_src.dtype)
+    for origin in range(eval_start, eval_end - horizon + 1, step):
+        j = origin - eval_start
+        temp_ev[j:j + horizon] = bd.temp_at(origin, horizon)
     df_ev = pd.DataFrame({"ds": ts_ev, "temp": temp_ev})
     fc = m.predict(df_ev)
     pred_full = fc["yhat"].to_numpy()
@@ -189,7 +205,7 @@ def nbeats_eval(bd: BAData, on: str, horizon: int = 24, step: int = 24,
     nf.fit(df, val_size=24 * 30)
 
     eval_start = bd.train_end if on == "val" else bd.val_end
-    eval_end = bd.val_end if on == "val" else len(bd.target)
+    eval_end = bd.val_end if on == "val" else bd.test_end
     abs_errs = []
     win_abs = []
 
@@ -225,9 +241,14 @@ def main() -> None:
                     default=_bas.demand_codes())
     ap.add_argument("--on", default="val")
     ap.add_argument("--with-gen", action="store_true")
+    ap.add_argument("--future-mode", default="persistence",
+                    choices=["persistence", "none", "oracle"],
+                    help="how horizon covariates are produced; must match the "
+                         "mode used for the Chronos runs being compared against")
     args = ap.parse_args()
 
-    bas = load_multi_ba(args.bas, with_gen=args.with_gen)
+    bas = load_multi_ba(args.bas, with_gen=args.with_gen,
+                        future_mode=args.future_mode)
     per_ba = {}
     all_win_mase = []
     for ba, bd in bas.items():
@@ -245,7 +266,7 @@ def main() -> None:
     macro_mase = float(np.mean([v["mase"] for v in per_ba.values()]))
 
     print("METRIC:", json.dumps({
-        "model": args.model, "on": args.on,
+        "model": args.model, "on": args.on, "future_mode": args.future_mode,
         "mase_macro": round(macro_mase, 4),
         "mase_ci_low": round(float(np.quantile(boots, 0.025)), 4),
         "mase_ci_high": round(float(np.quantile(boots, 0.975)), 4),

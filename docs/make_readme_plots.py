@@ -95,7 +95,7 @@ def hero_forecast() -> Path:
         for off in range(0, week_hours, horizon):
             o = start_idx + off
             past = {k: v[o - context:o] for k, v in bd.covariates.items()}
-            future = {k: bd.covariates[k][o:o + horizon] for k in bd.future_keys}
+            future = bd.future_at(o, horizon)
             task = [{"target": bd.target[o - context:o].astype(np.float32),
                      "past_covariates": past, "future_covariates": future}]
             q, _ = pipe.predict_quantiles(

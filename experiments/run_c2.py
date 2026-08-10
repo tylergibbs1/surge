@@ -10,6 +10,9 @@ Config keys:
     on            "val" | "test"
     bootstrap     int   0 for none, else n resamples
     batch_size    int   16
+    future_mode   "persistence" (default) | "none" | "oracle"
+                  How covariates over the horizon are produced. See
+                  experiments.features. "oracle" leaks realized future values.
 """
 from __future__ import annotations
 
@@ -38,7 +41,12 @@ def main() -> None:
     bootstrap = cfg.get("bootstrap", 0)
     seed = cfg.get("seed", 42)
 
-    bas = load_multi_ba(bas_list, with_gen=cfg.get("with_gen", True))
+    # "persistence" (default) is causal. "oracle" replays realized weather and
+    # renewables over the horizon — a perfect-foresight upper bound, not a
+    # forecast; never publish it unlabelled or against a real forecaster.
+    future_mode = cfg.get("future_mode", "persistence")
+    bas = load_multi_ba(bas_list, with_gen=cfg.get("with_gen", True),
+                        future_mode=future_mode)
 
     t0 = time.time()
     pipe = BaseChronosPipeline.from_pretrained(base, device_map="cuda", torch_dtype=torch.bfloat16)
@@ -50,9 +58,13 @@ def main() -> None:
                         per_step=cfg.get("per_step", False))
     eval_s = time.time() - t0
 
+    sample = next(iter(bas.values()), None)
     out = {
         "exp": exp_name, "base": base, "bas": bas_list, "on": on,
         "context": context, "horizon": horizon,
+        "future_mode": future_mode,
+        "future_keys": sample.future_keys if sample else [],
+        "leaks_future": bool(sample.leaks_future) if sample else False,
         "load_s": round(load_s, 2), "eval_s": round(eval_s, 2),
         **{k: round(v, 4) if isinstance(v, (float, int)) and not isinstance(v, bool) else v
            for k, v in m.items() if k != "per_ba"},
