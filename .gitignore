@@ -69,3 +69,7 @@ web/**/.env.local
 .DS_Store
 .vercel
 .env*.local
+
+# auto-research loop artifacts (untracked, survive git resets)
+results.tsv
+run.log
