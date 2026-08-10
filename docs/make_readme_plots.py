@@ -10,6 +10,7 @@ Run with the local venv:
 """
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -26,7 +27,8 @@ from chronos import BaseChronosPipeline
 from experiments.features import load_multi_ba
 
 ROOT = Path(__file__).resolve().parents[1]
-MODEL_PATH = ROOT / "models" / "chronos2_full_v2"
+MODEL_PATH = Path(os.environ.get("SURGE_MODEL_PATH",
+                                str(ROOT / "models" / "chronos2_full_v2")))
 OUT = ROOT / "docs" / "plots"
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -59,7 +61,10 @@ plt.rcParams.update({
 # ------------------------------------------------------------------
 def hero_forecast() -> Path:
     BAS = ["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"]
-    bas = load_multi_ba(BAS, with_gen=False)
+    # future_mode="none" is the honest serving configuration: no future weather,
+    # which is what the README caption claims. Do not switch this to "oracle" —
+    # the chart would then show a forecast nobody can actually make.
+    bas = load_multi_ba(BAS, with_gen=False, future_mode="none")
 
     pipe = BaseChronosPipeline.from_pretrained(
         str(MODEL_PATH),
@@ -138,7 +143,8 @@ def hero_forecast() -> Path:
         + f"\n\n  Overall  {np.mean(mapes):5.2f}%\n\n"
         "Dashed line = median forecast.\n"
         "Shaded band = 80% probability interval.\n"
-        "Model: Chronos-2 fine-tuned on\n7 BAs × 7 years of public data."
+        "Causal covariates only — no\nfuture weather or renewables.\n"
+        "Model: Chronos-2 fine-tuned on\n53 BAs × 7 years of public data."
     )
     ax.text(0.03, 0.97, text, color=FG, fontsize=10.5, va="top",
             family="monospace", transform=ax.transAxes)
@@ -159,17 +165,19 @@ def hero_forecast() -> Path:
 # 2. LEADERBOARD — bar chart of test MASE with 95% CIs
 # ------------------------------------------------------------------
 def leaderboard() -> Path:
+    # Re-measured under causal covariates on the pinned 2025 window with a
+    # deduplicated store. Rows we have NOT re-scored under this protocol
+    # (Prophet, N-BEATS, Chronos-Bolt, surge-fm-v2) are deliberately absent
+    # rather than carried over from the superseded run — plotting them beside
+    # these bars would recreate the apples-to-oranges comparison being fixed.
     data = [
-        ("persistence",                          2.3061, None, None, "#f44336"),
-        ("Prophet (+temp regressor)",            2.0234, 1.978, 2.068, "#f44336"),
-        ("seasonal-naive-24  (baseline)",        1.0440, 1.019, 1.071, "#888"),
-        ("XGBoost hourly-binned (Roy '25)",      0.9010, 0.879, 0.924, "#ff9800"),
-        ("N-BEATS (Pelekis '23)",                0.7144, 0.692, 0.738, "#ff9800"),
-        ("Chronos-Bolt-base zero-shot",          0.6876, 0.668, 0.708, "#2196F3"),
-        ("Chronos-2 zero-shot  +wx +cal",        0.5672, 0.550, 0.586, "#2196F3"),
-        ("Chronos-2 LoRA ft  +wx +cal",          0.5134, 0.499, 0.530, "#4CAF50"),
-        ("Chronos-2 full ft  +wx +cal",          0.4921, 0.477, 0.509, "#4CAF50"),
-        ("Ensemble of 3 Chronos-2 (SOTA)",       0.4534, 0.440, 0.470, "#4FC3F7"),
+        ("seasonal-naive-24  (baseline)",        1.0442, None,   None,   "#888"),
+        ("XGBoost hourly-binned (Roy '25)",      1.0189, None,   None,   "#ff9800"),
+        ("Chronos-2 zero-shot",                  0.6203, 0.5986, 0.6439, "#2196F3"),
+        ("surge-fm-v3",                          0.5937, 0.5742, 0.6137, "#4CAF50"),
+        ("surge-fm-v3  + peer-BA load",          0.5804, 0.5630, 0.5977, "#4CAF50"),
+        ("surge-fm-v3  + peers, re-adapted",     0.5720, 0.5555, 0.5877, "#4FC3F7"),
+        ("(perfect foresight — NOT a forecast)", 0.4683, 0.4542, 0.4822, "#7E57C2"),
     ]
     labels = [r[0] for r in data]
     mase = [r[1] for r in data]
@@ -190,7 +198,7 @@ def leaderboard() -> Path:
     ax.invert_yaxis()
     ax.set_xlabel("Test MASE  (lower is better, 95% CI)", color=FG, fontsize=11)
     ax.set_xlim(0, 2.4)
-    ax.set_title("Surge vs. every classical & foundation baseline on 2025 hold-out",
+    ax.set_title("Surge vs. baselines, 2025 hold-out — causal covariates only",
                  color=FG, fontsize=13, fontweight="bold", loc="left", pad=12)
     for i, m in enumerate(mase):
         ax.text(m + err_hi[i] + 0.03, i, f"{m:.3f}", color=FG, fontsize=9, va="center")
@@ -198,8 +206,9 @@ def leaderboard() -> Path:
     for s in ax.spines.values():
         s.set_color("#333")
     fig.text(0.01, 0.01,
-             "7 US BAs, macro MASE, 367 rolling 24h-ahead windows, "
-             "denominator = per-BA train seasonal-naive (m=24).",
+             "7 US RTOs, macro MASE, 365 rolling 24h-ahead windows over calendar 2025, "
+             "denominator = per-BA train seasonal-naive (m=24). No future weather or "
+             "renewables except the labelled perfect-foresight bar.",
              color=MUTED, fontsize=8.5)
     fig.tight_layout(rect=[0, 0.03, 1, 1])
     path = OUT / "leaderboard.png"
@@ -212,33 +221,34 @@ def leaderboard() -> Path:
 # 3. HORIZON CURVE — MASE vs forecast horizon, with naive break-even
 # ------------------------------------------------------------------
 def horizon_curve() -> Path:
-    # Matched-horizon results from experiments/results.tsv
+    # Causal-covariate measurement (future_mode=none), 7 RTOs, 2025 test split.
     matched = {
-        1:   0.1712,
-        6:   0.3198,
-        24:  0.4643,
-        72:  0.6233,
-        168: 0.7613,
+        1: 0.2129,
+        6: 0.3054,
+        24: 0.572,
+        72: 0.9009,
+        168: 1.2021,
     }
-    # Per-step from h=168 run (first 168 values) — in order of step_ahead
+    # Per-step MASE from the h=168 run, in order of step_ahead. Crosses the
+    # seasonal-naive line (1.0) at h41 — far earlier than the leaky run suggested.
     per_step = np.array([
-        0.211, 0.271, 0.302, 0.312, 0.320, 0.329, 0.330, 0.335, 0.338, 0.343,
-        0.355, 0.392, 0.447, 0.485, 0.524, 0.577, 0.607, 0.655, 0.694, 0.721,
-        0.736, 0.748, 0.741, 0.706, 0.710, 0.687, 0.652, 0.603, 0.558, 0.532,
-        0.510, 0.498, 0.488, 0.476, 0.481, 0.516, 0.559, 0.603, 0.649, 0.699,
-        0.752, 0.815, 0.865, 0.892, 0.908, 0.915, 0.902, 0.879, 0.869, 0.830,
-        0.784, 0.730, 0.672, 0.633, 0.595, 0.565, 0.544, 0.532, 0.539, 0.574,
-        0.627, 0.667, 0.709, 0.767, 0.824, 0.894, 0.948, 0.983, 0.998, 1.004,
-        0.993, 0.958, 0.947, 0.905, 0.852, 0.789, 0.726, 0.685, 0.646, 0.622,
-        0.594, 0.577, 0.581, 0.614, 0.657, 0.694, 0.743, 0.799, 0.862, 0.932,
-        0.988, 1.020, 1.034, 1.041, 1.029, 1.001, 0.995, 0.949, 0.893, 0.831,
-        0.762, 0.718, 0.678, 0.645, 0.613, 0.594, 0.597, 0.632, 0.681, 0.724,
-        0.772, 0.836, 0.897, 0.971, 1.025, 1.060, 1.077, 1.092, 1.079, 1.041,
-        1.027, 0.980, 0.929, 0.860, 0.789, 0.745, 0.706, 0.679, 0.645, 0.629,
-        0.629, 0.662, 0.703, 0.747, 0.802, 0.857, 0.918, 0.991, 1.047, 1.080,
-        1.099, 1.110, 1.093, 1.067, 1.059, 1.016, 0.959, 0.900, 0.834, 0.783,
-        0.737, 0.700, 0.665, 0.646, 0.645, 0.678, 0.726, 0.775, 0.832, 0.899,
-        0.972, 1.043, 1.107, 1.144, 1.162, 1.173, 1.155, 1.125,
+        0.229, 0.284, 0.309, 0.328, 0.351, 0.369, 0.402, 0.414, 0.418, 0.424,
+        0.450, 0.484, 0.528, 0.566, 0.614, 0.671, 0.728, 0.786, 0.854, 0.896,
+        0.917, 0.924, 0.916, 0.914, 0.897, 0.856, 0.831, 0.807, 0.776, 0.751,
+        0.724, 0.716, 0.706, 0.702, 0.716, 0.740, 0.781, 0.832, 0.897, 0.968,
+        1.057, 1.148, 1.238, 1.300, 1.327, 1.335, 1.313, 1.307, 1.278, 1.206,
+        1.157, 1.099, 1.046, 1.000, 0.961, 0.935, 0.912, 0.893, 0.901, 0.918,
+        0.953, 1.008, 1.083, 1.168, 1.269, 1.363, 1.459, 1.520, 1.546, 1.544,
+        1.520, 1.506, 1.455, 1.384, 1.325, 1.264, 1.199, 1.143, 1.101, 1.070,
+        1.046, 1.027, 1.023, 1.031, 1.056, 1.112, 1.189, 1.274, 1.373, 1.478,
+        1.576, 1.643, 1.669, 1.673, 1.643, 1.636, 1.595, 1.511, 1.455, 1.382,
+        1.310, 1.254, 1.209, 1.174, 1.141, 1.115, 1.118, 1.123, 1.157, 1.215,
+        1.296, 1.383, 1.481, 1.578, 1.668, 1.727, 1.754, 1.748, 1.717, 1.699,
+        1.651, 1.583, 1.521, 1.459, 1.381, 1.322, 1.275, 1.237, 1.214, 1.193,
+        1.187, 1.187, 1.215, 1.279, 1.362, 1.446, 1.549, 1.655, 1.747, 1.807,
+        1.829, 1.824, 1.787, 1.771, 1.732, 1.643, 1.587, 1.515, 1.436, 1.376,
+        1.326, 1.284, 1.252, 1.224, 1.224, 1.228, 1.262, 1.322, 1.409, 1.498,
+        1.588, 1.684, 1.771, 1.825, 1.857, 1.854, 1.826, 1.803,
     ])
     xs = np.arange(1, len(per_step) + 1)
 
