@@ -97,7 +97,7 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-FUTURE_MODES = ("persistence", "lag24", "none", "oracle")
+FUTURE_MODES = ("persistence", "lag24", "forecast", "none", "oracle")
 
 CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
                  "is_weekend", "is_holiday")
@@ -136,6 +136,12 @@ def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
         policy["temp_c"] = "lag24"
         for c in gen_cols:
             policy[c] = "past_only"
+    elif mode == "forecast":
+        # A real archived day-ahead NWP forecast. Causal: the value for hour t
+        # was issued ~24h before t. See surge.scrapers.openmeteo.
+        policy["temp_c"] = "forecast"
+        for c in gen_cols:
+            policy[c] = "past_only"
     else:  # "none"
         policy["temp_c"] = "past_only"
         for c in gen_cols:
@@ -155,6 +161,16 @@ class BAData:
     val_end: int
     test_end: int
     denom_mae: float
+    # (T,) archived day-ahead FORECAST temperature. Deliberately NOT a member of
+    # `covariates`: it is not a realized observation, so the causal guard — which
+    # perturbs actuals at and after the origin — must not treat it as one. Its
+    # value for hour t was issued ~24 h before t, so slicing it over a horizon of
+    # 24 h or less reads only information available at forecast time.
+    temp_fcst: np.ndarray | None = None
+    # First index with real forecast coverage. Training must not sample before
+    # this, or it falls back to observed temperature and recreates exactly the
+    # train/serve mismatch this channel exists to remove.
+    fcst_start: int = 0
 
     @property
     def future_keys(self) -> list[str]:
@@ -189,6 +205,12 @@ class BAData:
                 out[k] = np.full(horizon, last, dtype=v.dtype)
             elif pol == "lag24":
                 out[k] = v[_lag_idx(origin, horizon, len(v))]
+            elif pol == "forecast":
+                if self.temp_fcst is None:
+                    raise ValueError(
+                        f"{self.ba}: future_mode='forecast' needs weather_fcst_hourly — "
+                        "run scripts/backfill_weather_forecast.py first")
+                out[k] = self.temp_fcst[origin:origin + horizon]
             else:
                 raise ValueError(f"unknown policy {pol!r} for {k!r}")
         return out
@@ -205,6 +227,8 @@ class BAData:
             return v[origin:origin + horizon]
         if pol == "lag24":
             return v[_lag_idx(origin, horizon, len(v))]
+        if pol == "forecast" and self.temp_fcst is not None:
+            return self.temp_fcst[origin:origin + horizon]
         last = v[origin - 1] if origin > 0 else v[0]
         # Under "persistence" this is exactly what the Chronos models receive.
         # Under "none" the Chronos models get no temperature at all, while these
@@ -233,6 +257,14 @@ def _join_ba(ba: str, *, with_gen: bool = True,
                  .select("ts_utc", "temp_c")
                  .sort("ts_utc")
                  .collect())
+    try:
+        wx_fcst = (store.scan("weather_fcst_hourly", dedupe_on=["ts_utc", "ba"])
+                     .filter(pl.col("ba") == ba)
+                     .select("ts_utc", "temp_c_fcst", "temp_c_anal")
+                     .sort("ts_utc")
+                     .collect())
+    except Exception:
+        wx_fcst = None
     j = load.join(weather, on="ts_utc", how="left")
 
     if with_gen:
@@ -268,6 +300,40 @@ def _join_ba(ba: str, *, with_gen: bool = True,
                 covariates[col] = np.zeros(len(target), dtype=np.float32)
             gen_cols.append(col)
 
+    # Align the archived forecast onto this BA's hourly index. Hours before the
+    # archive begins (GFS 2m temp starts ~2021-03) fall back to observed
+    # temperature purely so the array is well-formed; `fcst_start` marks where
+    # real forecast coverage begins and training must not sample before it.
+    temp_fcst = None
+    fcst_start = 0
+    if wx_fcst is not None and wx_fcst.height:
+        src_ts = wx_fcst["ts_utc"].to_numpy()
+        src_v = wx_fcst["temp_c_fcst"].to_numpy().astype(np.float64)
+        src_anal = wx_fcst["temp_c_anal"].to_numpy().astype(np.float64)
+        idx = np.clip(np.searchsorted(src_ts, ts), 0, len(src_ts) - 1)
+        hit = src_ts[idx] == ts
+        aligned = np.where(hit, src_v[idx], np.nan)
+        aligned_anal = np.where(hit, src_anal[idx], np.nan)
+        covered = np.flatnonzero(~np.isnan(aligned))
+        if covered.size:
+            fcst_start = int(covered[0])
+            # Interior gaps carry the last real forecast forward; the
+            # pre-coverage prefix takes observed temperature and is excluded
+            # from training by fcst_start.
+            aligned = _ffill_np(aligned)
+            aligned[:fcst_start] = temp[:fcst_start]
+            temp_fcst = aligned.astype(np.float32)
+
+            # Replace the PAST temperature channel with the analysis from the
+            # same grid point as the forecast. Otherwise the model sees ASOS
+            # station history and then a centroid forecast, which for PJM
+            # differ by ~5 C on average — a discontinuity exactly at the
+            # forecast boundary, which is the worst possible place for one.
+            if future_mode == "forecast" and not np.all(np.isnan(aligned_anal)):
+                anal = _ffill_np(aligned_anal)
+                anal[:fcst_start] = temp[:fcst_start]
+                covariates["temp_c"] = anal.astype(np.float32)
+
     future_policy = _resolve_policy(future_mode, gen_cols)
 
     years = j["ts_utc"].dt.year().to_numpy()
@@ -285,6 +351,7 @@ def _join_ba(ba: str, *, with_gen: bool = True,
         ba=ba, ts_utc=ts, target=target.astype(np.float32),
         covariates=covariates, future_policy=future_policy, future_mode=future_mode,
         train_end=train_end, val_end=val_end, test_end=test_end, denom_mae=denom,
+        temp_fcst=temp_fcst, fcst_start=fcst_start,
     )
 
 
