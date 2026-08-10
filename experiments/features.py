@@ -51,13 +51,20 @@ US_HOLIDAYS = holidays.UnitedStates()
 
 
 def _ffill_np(x: np.ndarray) -> np.ndarray:
+    # Vectorised forward fill. This runs thousands of times per evaluation (once
+    # per BA pair when peer covariates are built), so the original per-element
+    # Python loop dominated wall-clock. Semantics are unchanged.
     out = x.astype(np.float64).copy()
-    last = np.nan
-    for i in range(len(out)):
-        if np.isnan(out[i]):
-            out[i] = last
-        else:
-            last = out[i]
+    if out.size:
+        valid = ~np.isnan(out)
+        idx = np.where(valid, np.arange(out.size), 0)
+        np.maximum.accumulate(idx, out=idx)
+        # Positions before the first real value have no source to carry
+        # forward; they stay NaN here and are backfilled below.
+        carried = out[idx]
+        first = int(np.argmax(valid)) if valid.any() else out.size
+        carried[:first] = np.nan
+        out = carried
     mask = np.isnan(out)
     if mask.any():
         # Backfill leading NaNs with the first real value; if the array is
