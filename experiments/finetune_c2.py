@@ -24,7 +24,7 @@ import numpy as np
 import torch
 
 from chronos import BaseChronosPipeline
-from experiments.features import load_multi_ba
+from experiments.features import FUTURE_MODES, load_multi_ba
 from surge import bas as _bas
 
 
@@ -59,7 +59,11 @@ def main() -> None:
     # Must match the eval mode: this decides which covariates the checkpoint
     # declares as known-future, so training and serving agree on the schema.
     ap.add_argument("--future-mode", default="persistence",
-                    choices=["persistence", "none", "oracle"])
+                    choices=list(FUTURE_MODES))
+    # Hours of the tail of TRAIN reserved for the trainer's early stopping. The
+    # real validation split must stay unseen: it is the search objective, and a
+    # model early-stopped on it would score optimistically there.
+    ap.add_argument("--inner-val-hours", type=int, default=8760)
     ap.add_argument("--out", type=str, required=True)
     args = ap.parse_args()
     print(f"[args] {vars(args)}", flush=True)
@@ -68,9 +72,15 @@ def main() -> None:
     bas = load_multi_ba(args.bas, future_mode=args.future_mode)
     print(f"[data] loaded BAs: {list(bas)}", flush=True)
 
-    train_inputs = [_task(bd, 0, bd.train_end) for bd in bas.values()]
-    val_inputs   = [_task(bd, 0, bd.val_end)   for bd in bas.values()]
-    print(f"[data] train tasks: {len(train_inputs)} | val tasks: {len(val_inputs)}", flush=True)
+    # Inner split: fit on train minus its tail year, early-stop on train including
+    # it. bd.val_end onwards is never shown to the trainer.
+    inner_ends = {ba: max(bd.train_end - args.inner_val_hours, bd.train_end // 2)
+                  for ba, bd in bas.items()}
+    train_inputs = [_task(bd, 0, inner_ends[ba]) for ba, bd in bas.items()]
+    val_inputs   = [_task(bd, 0, bd.train_end)   for bd in bas.values()]
+    print(f"[data] train tasks: {len(train_inputs)} | val tasks: {len(val_inputs)} "
+          f"| inner_val_hours={args.inner_val_hours} | val split (2024) held out",
+          flush=True)
 
     pipe = BaseChronosPipeline.from_pretrained(args.base, device_map="cuda",
                                                torch_dtype=torch.bfloat16)
