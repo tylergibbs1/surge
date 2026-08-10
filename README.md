@@ -26,13 +26,16 @@ forecast time — no future weather.*
   `surge.bas` tracks all 67 EIA-930 balancing authorities (53 with a
   demand series, 14 gen-/transmission-only).
 - `surge-fm-v3` — Chronos-2 fine-tuned on 7 years × 53 BAs of load with
-  temperature + calendar covariates. **Test MASE 0.597** on the 2025
-  hold-out (macro over 53 BAs); **0.572** on the original 7 RTOs
-  (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP). Beats seasonal-naive-24 by 38%
-  overall and 45% on the RTO subset, using only covariates that are
-  actually available at forecast time — see
+  temperature + calendar covariates. This is the **published** checkpoint.
+  **Test MASE 0.627** on the 2025 hold-out (macro over 53 BAs) and
+  **0.594** on the original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP);
+  **0.609 / 0.580** with the peer-BA covariates this repo now builds. Beats
+  seasonal-naive-24 by 34% overall and 43% on the RTO subset, using only
+  covariates actually available at forecast time — see
   [Accuracy](#accuracy-vs-the-status-quo) for what that means and why
   earlier numbers here were higher.
+  A causally re-adapted checkpoint reaches **0.597 / 0.572** but is not yet
+  released; see [roadmap](#roadmap).
 - `surge-fm-v2` — Previous generation, 7-BA RTO-only model. Its published
   figure was measured under the superseded protocol and has not been
   re-scored; treat it as unverified. Still available via
@@ -150,11 +153,15 @@ apples-to-oranges comparison this table exists to fix.
 
 ### All 53 BAs
 
-| Slice | Test MASE | n BAs | MAE (MW macro) |
+| Slice | v3 (published) | v3 + peers | re-adapted (unreleased) |
 |---|---:|---:|---:|
-| All demand-reporting BAs | 0.597 | 53 | 276 |
-| 7 RTO/ISOs | 0.572 | 7 | 1,143 |
-| 46 non-RTO utilities | ≈0.600 | 46 | — |
+| All 53 demand-reporting BAs | 0.627 | 0.609 | **0.597** |
+| 7 RTO/ISOs | 0.594 | 0.580 | **0.572** |
+| seasonal-naive-24, all 53 | 0.956 | — | — |
+
+Macro MAE for the re-adapted model is 276 MW over all 53 BAs and 1,143 MW
+over the 7 RTOs; the two differ by an order of magnitude simply because RTOs
+are far larger, which is why MASE rather than MAE is the headline metric.
 
 All numbers: 2025 hold-out (exactly 8,760 h, pinned), rolling 24 h-ahead
 windows at step=24, MASE denominator = per-BA train-set seasonal-naive
@@ -206,6 +213,10 @@ and realized wind/solar — a handicap the operators did not get.
 | **ISO-NE** | **624 MW** | **306 MW** | **0.49×** | **0.69** | **0.34** |
 | SPP | 988 MW | 2,590 MW | **2.62×** | 0.67 | 1.77 |
 | **macro (7 RTOs)** | **1,143 MW** | **1,715 MW** | **1.50×** | **0.572** | **0.880** |
+
+Surge figures above are the causally re-adapted checkpoint (macro MASE
+0.572). The currently published `surge-fm-v3` is marginally behind at 0.580
+with peer covariates, which does not change the 4-of-7 verdict.
 
 Surge's macro MAE is ~33% lower than the operators' own submissions; macro
 MASE is ~35% lower. **Three losses**: ISO-NE, whose forecasting team is
