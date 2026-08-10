@@ -254,7 +254,12 @@ def _join_ba(ba: str, *, with_gen: bool = True,
             if col in j.columns:
                 v = _ffill_np(j[col].to_numpy().astype(np.float64))
                 covariates[col] = v.astype(np.float32)
-                gen_cols.append(col)
+            else:
+                # Zero-fill so every BA exposes the same covariate keys.
+                # Chronos-2's fit() rejects heterogeneous key sets across tasks,
+                # and a uniform schema is also what keeps train and serve aligned.
+                covariates[col] = np.zeros(len(target), dtype=np.float32)
+            gen_cols.append(col)
 
     future_policy = _resolve_policy(future_mode, gen_cols)
 
@@ -324,9 +329,15 @@ def _attach_neighbors(bas: dict[str, BAData], k: int) -> None:
                 scored.append((abs(r), src))
         scored.sort(reverse=True)
 
-        for rank, (_, src) in enumerate(scored[:k], start=1):
+        # Always emit exactly k channels, zero-filled when a BA has too few
+        # usable peers, so the covariate key set is identical across all tasks.
+        for rank in range(1, k + 1):
             name = f"nbr{rank}_load"
-            bd.covariates[name] = aligned[(tgt, src)].astype(np.float32)
+            if rank <= len(scored):
+                src = scored[rank - 1][1]
+                bd.covariates[name] = aligned[(tgt, src)].astype(np.float32)
+            else:
+                bd.covariates[name] = np.zeros(len(bd.target), dtype=np.float32)
             bd.future_policy[name] = "past_only"
 
 
