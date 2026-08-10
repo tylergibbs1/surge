@@ -97,7 +97,13 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-FUTURE_MODES = ("persistence", "lag24", "forecast", "none", "oracle")
+FUTURE_MODES = ("persistence", "lag24", "forecast", "analysis_only", "none", "oracle")
+
+# Modes whose PAST temperature channel comes from Open-Meteo rather than ASOS.
+# "forecast" and its control must share the same past channel, otherwise a
+# comparison between them conflates two changes: a new future channel and a
+# new past one.
+_OPENMETEO_PAST_MODES = frozenset({"forecast", "analysis_only"})
 
 CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
                  "is_weekend", "is_holiday")
@@ -140,6 +146,13 @@ def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
         # A real archived day-ahead NWP forecast. Causal: the value for hour t
         # was issued ~24h before t. See surge.scrapers.openmeteo.
         policy["temp_c"] = "forecast"
+        for c in gen_cols:
+            policy[c] = "past_only"
+    elif mode == "analysis_only":
+        # Control for "forecast": identical past channel (Open-Meteo analysis),
+        # no future temperature at all. The difference between the two is
+        # attributable solely to the forecast covariate.
+        policy["temp_c"] = "past_only"
         for c in gen_cols:
             policy[c] = "past_only"
     else:  # "none"
@@ -329,7 +342,7 @@ def _join_ba(ba: str, *, with_gen: bool = True,
             # station history and then a centroid forecast, which for PJM
             # differ by ~5 C on average — a discontinuity exactly at the
             # forecast boundary, which is the worst possible place for one.
-            if future_mode == "forecast" and not np.all(np.isnan(aligned_anal)):
+            if future_mode in _OPENMETEO_PAST_MODES and not np.all(np.isnan(aligned_anal)):
                 anal = _ffill_np(aligned_anal)
                 anal[:fcst_start] = temp[:fcst_start]
                 covariates["temp_c"] = anal.astype(np.float32)
