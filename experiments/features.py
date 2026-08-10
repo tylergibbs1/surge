@@ -276,7 +276,63 @@ def _join_ba(ba: str, *, with_gen: bool = True,
     )
 
 
+# Number of correlated peer BAs whose PAST load is attached as a covariate.
+# Their history is observable at forecast time, so this is causal; only their
+# future would be off-limits. 0 disables.
+N_NEIGHBORS = 2
+
+
+def _align_to(src_ts: np.ndarray, src_val: np.ndarray,
+              dst_ts: np.ndarray) -> np.ndarray:
+    """Reindex `src_val` onto `dst_ts` by exact timestamp match, then ffill."""
+    idx = np.clip(np.searchsorted(src_ts, dst_ts), 0, len(src_ts) - 1)
+    hit = src_ts[idx] == dst_ts
+    return _ffill_np(np.where(hit, src_val[idx], np.nan))
+
+
+def _attach_neighbors(bas: dict[str, BAData], k: int) -> None:
+    """Add the k most train-correlated peer BAs' load as past-only covariates.
+
+    Peers are chosen on the *train* split only — picking them on validation
+    would tune the feature set to the split being scored.
+    """
+    if k <= 0 or len(bas) < 2:
+        return
+
+    codes = list(bas)
+    aligned: dict[tuple[str, str], np.ndarray] = {}
+    for tgt in codes:
+        bd = bas[tgt]
+        for src in codes:
+            if src == tgt:
+                continue
+            aligned[(tgt, src)] = _align_to(
+                bas[src].ts_utc, bas[src].target.astype(np.float64), bd.ts_utc)
+
+    for tgt in codes:
+        bd = bas[tgt]
+        own = bd.target[:bd.train_end].astype(np.float64)
+        scored = []
+        for src in codes:
+            if src == tgt:
+                continue
+            peer = aligned[(tgt, src)][:bd.train_end]
+            if peer.std() == 0 or own.std() == 0:
+                continue
+            r = float(np.corrcoef(own, peer)[0, 1])
+            if np.isfinite(r):
+                scored.append((abs(r), src))
+        scored.sort(reverse=True)
+
+        for rank, (_, src) in enumerate(scored[:k], start=1):
+            name = f"nbr{rank}_load"
+            bd.covariates[name] = aligned[(tgt, src)].astype(np.float32)
+            bd.future_policy[name] = "past_only"
+
+
 def load_multi_ba(bas: list[str], *, with_gen: bool = True,
                   future_mode: str = "persistence") -> dict[str, BAData]:
-    return {ba: _join_ba(ba, with_gen=with_gen, future_mode=future_mode)
-            for ba in bas}
+    out = {ba: _join_ba(ba, with_gen=with_gen, future_mode=future_mode)
+           for ba in bas}
+    _attach_neighbors(out, N_NEIGHBORS)
+    return out
