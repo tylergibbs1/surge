@@ -220,13 +220,34 @@ before any forecast was added.
 
 ### Perfect-foresight ceiling, for reference only
 
-Handing the model realized weather and realized renewable generation over
-the forecast window scores **0.468** on the RTO subset — 18% better than
-the honest 0.572. That gap is the value of a perfect weather and renewables
-forecast, and it is the standard practice in much of the load-forecasting
-literature, which is careful to label it an upper bound rather than an
-operational result. It is reported here for the same reason and must not be
-compared against any real forecaster.
+Replacing the day-ahead forecast with **perfect foresight of the same
+temperature channel** scores **0.488** on the RTO subset and **0.446** over
+all 53 BAs. That is the true ceiling for this configuration, and it says how
+much a better weather forecast could still be worth:
+
+| | no future wx | real forecast | perfect foresight |
+|---|---:|---:|---:|
+| 7 RTOs | 0.594 | **0.536** | 0.488 |
+| All 53 BAs | 0.627 | **0.540** | 0.446 |
+
+So a real GFS forecast captures a little over half the available weather
+headroom on the RTOs, and roughly half across all 53. The remaining ~9%
+(RTOs) is reachable only with a better forecast — a sharper NWP model,
+ensemble means, or more variables — not with a better load model. That keeps
+weather, not architecture, as the top lever.
+
+A caution about earlier versions of this section: they quoted a ceiling of
+0.468 (RTO) / 0.610 (all 53) measured against the *ASOS* channel, which is
+zero-filled for 46 of 53 BAs. Those were not valid upper bounds. The all-53
+figure was actually **worse** than what the honest configuration now
+achieves, because perfect foresight of a mostly-empty channel is worth less
+than a real forecast of a populated one. Any "oracle" number is only a
+ceiling for the exact channel it was measured on.
+
+Perfect-foresight figures are reported here for calibration of expectations
+only. They are standard practice in the load-forecasting literature as
+explicitly-labelled upper bounds, and must never be compared against a real
+forecaster.
 
 Two further caveats worth stating plainly:
 
@@ -256,27 +277,30 @@ and realized wind/solar — a handicap the operators did not get.
 
 | Region | Surge MAE | Operator MAE | Ratio | Surge MASE | Operator MASE |
 |---|---:|---:|---:|---:|---:|
-| PJM | 2,259 MW | 3,297 MW | 1.46× | 0.47 | 0.68 |
-| CAISO | 633 MW | 2,098 MW | **3.31×** | 0.50 | 1.66 |
-| **ERCOT** | **1,528 MW** | **1,366 MW** | **0.89×** | **0.63** | **0.56** |
-| MISO | 1,395 MW | 1,786 MW | 1.28× | 0.43 | 0.55 |
-| **NYISO** | **572 MW** | **560 MW** | **0.98×** | **0.61** | **0.60** |
-| **ISO-NE** | **624 MW** | **306 MW** | **0.49×** | **0.69** | **0.34** |
-| SPP | 988 MW | 2,590 MW | **2.62×** | 0.67 | 1.77 |
-| **macro (7 RTOs)** | **1,143 MW** | **1,715 MW** | **1.50×** | **0.572** | **0.880** |
+| PJM | 2,187 MW | 3,297 MW | 1.51× | 0.45 | 0.68 |
+| CAISO | 626 MW | 2,098 MW | **3.35×** | 0.50 | 1.66 |
+| ERCOT | 1,357 MW | 1,366 MW | 1.01× | 0.56 | 0.56 |
+| MISO | 1,326 MW | 1,786 MW | 1.35× | 0.41 | 0.55 |
+| NYISO | 537 MW | 560 MW | 1.04× | 0.57 | 0.60 |
+| **ISO-NE** | **592 MW** | **306 MW** | **0.52×** | **0.65** | **0.34** |
+| SPP | 885 MW | 2,590 MW | **2.93×** | 0.60 | 1.77 |
+| **macro (7 RTOs)** | **1,073 MW** | **1,715 MW** | **1.60×** | **0.536** | **0.880** |
 
-Surge figures above are the causally re-adapted checkpoint (macro MASE
-0.572). The currently published `surge-fm-v3` is marginally behind at 0.580
-with peer covariates, which does not change the 4-of-7 verdict.
+Surge figures are the **published** `surge-fm-v3` supplied with day-ahead
+forecast weather — reproducible with the checkpoint on Hugging Face, not an
+unreleased model.
 
-Surge's macro MAE is ~33% lower than the operators' own submissions; macro
-MASE is ~35% lower. **Three losses**: ISO-NE, whose forecasting team is
-genuinely elite (MASE 0.34 for a 24-hour-ahead forecast is excellent);
-NYISO, essentially a tie; and ERCOT, which is where losing realized
-renewables costs the most — unsurprising, since ERCOT carries the largest
-wind and solar share of any RTO here. Two operator submissions, **CAISO
-(MASE 1.66) and SPP (MASE 1.77)**, still did worse than a "same as
-yesterday" baseline over 2025.
+Macro MAE is ~37% lower than the operators' own submissions and macro MASE
+~39% lower. **ISO-NE is the sole loss**, and their team is genuinely elite —
+MASE 0.34 at a 24-hour horizon is excellent. ERCOT and NYISO are effectively
+ties (1.01× and 1.04×). Two operator submissions, **CAISO (1.66) and SPP
+(1.77)**, still did worse than a "same as yesterday" baseline over 2025.
+
+An earlier version of this table claimed 6 of 7 by handing surge *realized*
+weather and *realized* wind and solar — a handicap the operators never got.
+Stripping that took it to 4 of 7. Real day-ahead forecast weather brings it
+back to 6 of 7 legitimately. The original claim happened to be about right;
+the evidence for it was not.
 
 Reproduce: `python scripts/compare_eia_df.py --start 2025-01-01 --end 2026-01-01`
 for the operator side, then `python -m experiments.run_c2 rto7
@@ -286,25 +310,31 @@ for the operator side, then `python -m experiments.run_c2 rto7
 
 ![Horizon degradation curve](docs/plots/horizon_curve.png)
 
-Per-step forecast skill crosses the seasonal-naive-24 line at **41 hours
-(≈1.7 days)**. Matched-horizon MASE:
+With day-ahead forecast weather, per-step skill crosses the seasonal-naive-24
+line at **67 hours (≈2.8 days)**. Matched-horizon MASE:
 
 | horizon | 1 h | 6 h | 24 h | 72 h | 168 h |
 |---|---:|---:|---:|---:|---:|
-| MASE | 0.213 | 0.305 | 0.572 | 0.901 | 1.202 |
+| with forecast wx | 0.210 | 0.299 | **0.532** | 0.688 | 0.806 |
+| no future wx | 0.213 | 0.305 | 0.572 | 0.901 | 1.202 |
 
-An earlier version of this section claimed a ~70-hour (2.9-day) crossover.
-That figure came from the leaky protocol; measured causally the useful
-horizon is roughly **half** what was advertised, and by one week ahead the
-model is worse than "same as last week" (MASE 1.202).
+Weather is what buys horizon. Without it the crossover is 41 h and the model
+is *worse* than "same as last week" at one week out (1.202); with it the
+crossover roughly doubles to 67 h and a week-ahead forecast still beats naive
+(0.806).
 
-The model currently receives **no future weather at all**, because every
-causal temperature proxy tried so far scored worse than withholding
-temperature — including flat persistence, which is what the live API still
-sends and which is measurably *harmful* (RTO MASE 0.740 with it versus 0.594
-without). The cause is a train/serve mismatch: the checkpoint was fine-tuned
-with exact temperature over the horizon, so it treats the covariate as
-reliable and an imprecise stand-in misleads it.
+There is some history in this number worth recording. The original claim here
+was "~70 hours", produced under the leaky protocol. Stripping the leak took it
+to 41 h. Adding a real forecast brings it back to 67 h. The original figure
+was approximately correct and the reasoning behind it was not — it happened to
+approximate what a good forecast delivers by instead assuming a perfect one.
+
+Note the flat-temperature covariate the API shipped for months is measurably
+*harmful*: RTO MASE 0.740 with it against 0.594 with no future temperature at
+all. A constant 24 h temperature implies no diurnal cycle, and the checkpoint
+was fine-tuned to trust the covariate. Crude causal substitutes
+(same-hour-yesterday, month × hour climatology) also lost to withholding
+temperature. Only a genuine forecast helps.
 
 Closing the 0.572 → 0.468 perfect-foresight gap therefore needs a *genuine*
 weather forecast — real HRRR/GFS archives (`surge.scrapers.hrrr` exists but
