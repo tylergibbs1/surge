@@ -29,16 +29,16 @@ forecast time — no future weather.*
   temperature + calendar covariates. This is the **published** checkpoint.
   Given real archived day-ahead weather forecasts it reaches **Test MASE
   0.540** on the 2025 hold-out (macro over 53 BAs) and **0.536** on the
-  original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP) — beating
-  seasonal-naive-24 by 44% and 49% respectively, using only information
-  available at forecast time. Without future weather the same checkpoint
-  scores 0.627 / 0.594.
+  original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP). This beats
+  seasonal-naive-24 by 44% and 49%, and uses only information available at
+  forecast time. Without future weather the same checkpoint scores
+  0.627 / 0.594.
   **How you feed it matters more than which checkpoint you use**: see
   [Accuracy](#accuracy-vs-the-status-quo), and note that the flat-temperature
   covariate the API shipped for months is *worse than sending none at all*.
 - `surge-fm-v2` — Previous generation, 7-BA RTO-only model. Its published
   figure was measured under the superseded protocol and has not been
-  re-scored; treat it as unverified. Still available via
+  re-scored. Treat it as unverified. Still available via
   `SURGE_MODEL_PATH`.
 - `surge.api` — FastAPI inference service with NDJSON streaming and OpenAPI docs.
 - `web/playground` — Next.js playground at **surgeforecast.com**. Four
@@ -130,10 +130,10 @@ not to move (`experiments/causal_guard.py`).
 Earlier versions of this table declared observed ASOS temperature and EIA
 *actual* wind/solar generation as known-future inputs, which leaked the
 answer into the input. Those figures (RTO 0.518, 53-BA 0.636) were
-perfect-foresight upper bounds, not forecasts, and they were also computed
-before two data defects were fixed — a store that was scanned without
-deduplication (up to 4 rows per hour) and a test window with no upper bound
-that silently grew past 2025. Full accounting in [#1](../../issues/1).
+perfect-foresight upper bounds, not forecasts. They were also computed before
+two data defects were fixed. The store was scanned without deduplication, which
+left up to 4 rows per hour. The test window had no upper bound, so it silently
+grew past 2025. Full accounting in [#1](../../issues/1).
 
 ### 7-RTO subset (2025 hold-out, causal covariates)
 
@@ -168,7 +168,7 @@ apples-to-oranges comparison this table exists to fix.
 
 ### All 53 BAs
 
-Test MASE, 2025 hold-out. "no wx" = no future temperature; "forecast" = real
+Test MASE, 2025 hold-out. "no wx" means no future temperature. "forecast" means a real
 archived day-ahead forecast.
 
 | Slice | v3, no wx | v3 **+ forecast** | retrained (unreleased) | Chronos-2 zero-shot + forecast |
@@ -184,7 +184,7 @@ repo where fine-tuning is demonstrably worth something rather than being
 within noise of the base model.
 
 Macro MAE with forecast weather is 250 MW over all 53 BAs and 1,073 MW over
-the 7 RTOs; those differ by an order of magnitude simply because RTOs are far
+the 7 RTOs. Those differ by an order of magnitude because RTOs are far
 larger, which is why MASE rather than MAE is the headline metric.
 
 **You do not need a new checkpoint.** Retraining on the forecast channel buys
@@ -213,7 +213,7 @@ bias −0.40 to +0.20 °C.
 
 This also supersedes the ASOS backfill for the 46 non-RTO BAs. Open-Meteo
 serves any lat/lon, so those BAs went from a zero-filled weather channel to
-real history *and* forecasts; the past-channel switch alone was worth 2.0%
+real history *and* forecasts. The past-channel switch alone was worth 2.0%
 before any forecast was added.
 
     python scripts/backfill_weather_forecast.py --bas all --start 2021-03-01
@@ -223,7 +223,7 @@ before any forecast was added.
 Replacing the day-ahead forecast with **perfect foresight of the same
 temperature channel** scores **0.488** on the RTO subset and **0.446** over
 all 53 BAs. That is the true ceiling for this configuration, and it says how
-much a better weather forecast could still be worth:
+much a better weather forecast can still be worth:
 
 | | no future wx | real forecast | perfect foresight |
 |---|---:|---:|---:|
@@ -256,14 +256,14 @@ Two further caveats worth stating plainly:
 - **Five BAs have inflated MASE denominators.** The outlier filter clips
   only `load_mw > 200_000`, an absolute threshold, so a 70 GW spike in a
   1.8 GW BA survives and inflates that BA's denominator (BANC by ~60×).
-  BANC, SPA, LGEE, SEC and TEPC are affected; excluding them the 53-BA
+  BANC, SPA, LGEE, SEC and TEPC are affected. If you exclude them, the 53-BA
   macro is ~0.673 rather than 0.597. Fixing this is pending.
 
 ### vs. the grid operators' own forecasts
 
 **Surge beats EIA's day-ahead demand forecast on 4 of 7 major RTOs.**
 
-Every RTO/ISO submits a day-ahead load forecast to EIA each morning — that's
+Every RTO/ISO submits a day-ahead load forecast to EIA each morning. That is
 the *production* forecast used to schedule generation. We pull the operator
 submissions (`type=DF` on EIA's Grid Monitor endpoint) and score them against
 actuals for the exact same 2025 window, same 24h horizon, same per-BA MASE
@@ -271,7 +271,7 @@ denominator surge uses — 8,760 hours per BA, ~61,000 hours total.
 
 This comparison is only meaningful if both sides face the same uncertainty.
 The operators had to *forecast* weather and renewable output when they
-submitted; surge is therefore scored with causal covariates only. An earlier
+submitted. Surge is therefore scored with causal covariates only. An earlier
 version of this table claimed 6 of 7 wins by giving surge realized weather
 and realized wind/solar — a handicap the operators did not get.
 
@@ -299,7 +299,7 @@ ties (1.01× and 1.04×). Two operator submissions, **CAISO (1.66) and SPP
 An earlier version of this table claimed 6 of 7 by handing surge *realized*
 weather and *realized* wind and solar — a handicap the operators never got.
 Stripping that took it to 4 of 7. Real day-ahead forecast weather brings it
-back to 6 of 7 legitimately. The original claim happened to be about right;
+back to 6 of 7 legitimately. The original claim happened to be about right.
 the evidence for it was not.
 
 Reproduce: `python scripts/compare_eia_df.py --start 2025-01-01 --end 2026-01-01`
@@ -319,7 +319,7 @@ line at **67 hours (≈2.8 days)**. Matched-horizon MASE:
 | no future wx | 0.213 | 0.305 | 0.572 | 0.901 | 1.202 |
 
 Weather is what buys horizon. Without it the crossover is 41 h and the model
-is *worse* than "same as last week" at one week out (1.202); with it the
+is *worse* than "same as last week" at one week out (1.202). With forecast weather the
 crossover roughly doubles to 67 h and a week-ahead forecast still beats naive
 (0.806).
 
@@ -347,7 +347,7 @@ better load model.
 Pre-release, hosted demo live. The API runs locally from a one-line
 `uvicorn`, the 53-BA checkpoint auto-downloads from Hugging Face on
 first request, and the playground at [surgeforecast.com](https://surgeforecast.com)
-is open to anyone. See [roadmap](#roadmap) for what's next.
+is open to anyone. See the [roadmap](#roadmap).
 
 ## License
 
@@ -357,8 +357,8 @@ MIT — see [LICENSE](LICENSE).
 
 Research and reference use only. **Not for trading, regulated bidding, or
 bankability-graded decisions.** No SLA. Accuracy numbers are measured on a
-specific 2025 hold-out and may not generalise to future extreme events.
-Every figure states the covariate regime it was measured under; numbers
+specific 2025 hold-out and can differ for future extreme events.
+Every figure states the covariate regime it was measured under. Numbers
 taken under different regimes are not comparable, and the perfect-foresight
 figures are upper bounds rather than achievable forecasts.
 
@@ -387,9 +387,9 @@ figures are upper bounds rather than achievable forecasts.
       0.795. This is the clearest outstanding defect
 - [ ] Publish the forecast-trained checkpoint as surge-fm-v4 (only ~1% better
       than v3 given the same covariates, so low priority)
-- [ ] Per-BA robust outlier filter (the absolute 200 GW cutoff inflates the
+- [ ] Per-BA outlier filter based on each BA's own median (the absolute 200 GW cutoff inflates the
       MASE denominator for BANC, SPA, LGEE, SEC, TEPC)
-- [ ] Stop sending flat persistence temperature from the live API; it scores
+- [ ] Stop sending flat persistence temperature from the live API. It scores
       worse than sending no future temperature
 - [ ] Conformal calibration — the nominal 80% band covers ~76%
 - [ ] Phase 2: LMP forecasting task, Hugging Face dataset release
