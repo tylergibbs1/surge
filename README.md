@@ -380,17 +380,34 @@ figures are upper bounds rather than achievable forecasts.
       Open-Meteo serves any lat/lon, so the Iowa Mesonet rate-limit blocker
       no longer gates weather coverage. The 46 previously zero-filled BAs now
       have real temperature history *and* forecasts
-- [ ] Forecast renewables (`shortwave_radiation`, `wind_speed_100m` at the
-      same lead time) — realized wind/solar was worth a further 0.043 MASE
-- [ ] Conformal calibration. The nominal 80% band covers ~68-70% and gets
-      *worse* with every fine-tuning step, while zero-shot Chronos-2 is at
-      0.795. This is the clearest outstanding defect
-- [ ] Publish the forecast-trained checkpoint as surge-fm-v4 (only ~1% better
-      than v3 given the same covariates, so low priority)
-- [ ] Per-BA outlier filter based on each BA's own median (the absolute 200 GW cutoff inflates the
-      MASE denominator for BANC, SPA, LGEE, SEC, TEPC)
-- [ ] Stop sending flat persistence temperature from the live API. It scores
-      worse than sending no future temperature
-- [ ] Conformal calibration — the nominal 80% band covers ~76%
+- [x] Forecast renewables. Forecast irradiance and 100 m wind replace the
+      realized wind and solar channels. Worth −3.1% on the 7 RTOs
+- [x] Weather sampled at 4-6 metropolitan load centres per RTO instead of one
+      BA centroid. Worth −5.7%, and it improved every one of the seven BAs
+- [x] Stop sending flat persistence temperature from the live API. The serving
+      path now fetches a real day-ahead forecast, and omits future weather when
+      none is available rather than substituting a constant
+- [x] Per-BA robust outlier filter (`surge.clean`). The old absolute 200 GW
+      cutoff was one-sided and let large negatives through, which inflated the
+      MASE denominator for BANC, LGEE, SEC, SPA and TEPC
+- [x] Regenerate the plots under the causal protocol
+- [ ] Conformal calibration in the serving path. Split-conformal on the
+      validation split moves interval coverage from 0.750 to 0.8125 against a
+      nominal 0.80, and costs nothing in point accuracy because it moves only
+      the outer quantile pair. It is implemented in the evaluation harness and
+      is not yet wired into the API
+- [ ] Close the ISO-NE gap. It is the one RTO whose own day-ahead forecast still
+      beats surge (0.339 against 0.603). Multi-point weather improved ISO-NE by
+      7.8% and did not close it, so weather granularity is not the cause.
+      Behind-the-meter solar is the next thing to test
+- [ ] Publish the forecast-trained checkpoint as surge-fm-v4. Low priority: it
+      is about 1% better than v3 given the same covariates
 - [ ] Phase 2: LMP forecasting task, Hugging Face dataset release
 - [ ] Phase 3: scenario simulator (surge-sim)
+
+Ideas that were measured and rejected are recorded in
+`experiments/research_log.tsv` so they are not tried again. Five model-side
+changes made no difference or made results worse: weight-space checkpoint
+averaging, a cross-model NWP spread covariate, longer context, bridge-day and
+holiday-proximity features, and a Chronos-2 + TiRex-2 ensemble. Every measured
+gain so far has come from the data and the protocol instead.
