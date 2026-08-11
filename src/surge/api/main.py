@@ -14,6 +14,8 @@ Run:
 Env:
     SURGE_DATA_DIR       default ~/.surge/data
     SURGE_MODEL_PATH     default <repo>/models/chronos2_full_v2
+    SURGE_CONFORMAL_PATH default src/surge/api/conformal_deltas.json — per-BA
+                         interval calibration; absent means uncalibrated p10/p90
 """
 from __future__ import annotations
 

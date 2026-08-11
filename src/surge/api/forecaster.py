@@ -16,6 +16,7 @@ import numpy as np
 import polars as pl
 
 from surge import store
+from surge.api import conformal
 from surge.clean import clean_load
 
 # Prefer HF Hub (so users don't need to download 478 MB before running). If
@@ -229,6 +230,12 @@ def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
         batch_size=1,
     )
     q = quants_list[0].squeeze(0).float().cpu().numpy()  # (H, 3)
+
+    # Split-conformal calibration of the 80% interval. Only p10/p90 move, so the
+    # median served here — and every point-accuracy number reported against it —
+    # is identical with and without calibration. Falls back to the raw quantiles
+    # when this BA has no fitted delta; see surge.api.conformal.
+    q = conformal.apply_delta(q, ba, lo=0, mid=1, hi=2)
 
     points = []
     for i in range(horizon):
