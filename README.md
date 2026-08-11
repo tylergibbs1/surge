@@ -143,10 +143,23 @@ that silently grew past 2025. Full accounting in [#1](../../issues/1).
 |---|---:|---:|
 | seasonal-naive-24 (baseline) | 1.044 | — |
 | XGBoost hourly-binned (Roy '25) | 1.019 | −2% |
-| Chronos-2 zero-shot | 0.620 | −41% |
-| surge-fm-v3 | 0.594 | −43% |
-| surge-fm-v3 + peer-BA covariates | 0.580 | −44% |
-| **surge-fm-v3 + peers, causally re-adapted** | **0.572** | **−45%** |
+| Chronos-2 zero-shot, no future weather | 0.620 | −41% |
+| surge-fm-v3, no future weather | 0.594 | −43% |
+| Chronos-2 zero-shot **+ forecast weather** | 0.564 | −46% |
+| **surge-fm-v3 + forecast weather** | **0.536** | **−49%** |
+
+Two things this table is built to show:
+
+1. **The covariate matters more than the checkpoint.** Real day-ahead forecast
+   weather moves surge-fm-v3 from 0.594 to 0.536 — a bigger jump than any
+   amount of fine-tuning produced.
+2. **The fine-tune only earns its keep once the weather is good.** Given *no*
+   future weather, surge-fm-v3 (0.594) is barely ahead of stock Chronos-2
+   (0.620) and the confidence intervals overlap. Given the *same* forecast
+   covariates it wins clearly, 0.536 vs 0.564, with non-overlapping intervals
+   on validation. The reason is mechanical: the checkpoint was fine-tuned on
+   exact temperature, so it trusts the covariate — which is a liability when
+   the input is crude and an advantage when it is accurate (~1.3 °C MAE).
 
 Prophet, N-BEATS, Chronos-Bolt zero-shot and surge-fm-v2 have not been
 re-scored under this protocol, so their old figures are omitted rather than
@@ -155,19 +168,55 @@ apples-to-oranges comparison this table exists to fix.
 
 ### All 53 BAs
 
-| Slice | v3 (published) | v3 + peers | re-adapted (unreleased) |
-|---|---:|---:|---:|
-| All 53 demand-reporting BAs | 0.627 | 0.609 | **0.597** |
-| 7 RTO/ISOs | 0.594 | 0.580 | **0.572** |
-| seasonal-naive-24, all 53 | 0.956 | — | — |
+Test MASE, 2025 hold-out. "no wx" = no future temperature; "forecast" = real
+archived day-ahead forecast.
 
-Macro MAE for the re-adapted model is 276 MW over all 53 BAs and 1,143 MW
-over the 7 RTOs; the two differ by an order of magnitude simply because RTOs
-are far larger, which is why MASE rather than MAE is the headline metric.
+| Slice | v3, no wx | v3 **+ forecast** | retrained (unreleased) | Chronos-2 zero-shot + forecast |
+|---|---:|---:|---:|---:|
+| All 53 demand-reporting BAs | 0.627 | **0.540** | 0.532 | 0.569 |
+| 7 RTO/ISOs | 0.594 | **0.536** | 0.532 | 0.564 |
+| seasonal-naive-24, all 53 | 0.956 | — | — | — |
+
+Against stock Chronos-2 given identical forecast covariates, published v3 wins
+by 5.1% over all 53 BAs (0.540 vs 0.569) with non-overlapping 95% intervals
+— [0.534, 0.548] against [0.563, 0.577]. That is the first result in this
+repo where fine-tuning is demonstrably worth something rather than being
+within noise of the base model.
+
+Macro MAE with forecast weather is 250 MW over all 53 BAs and 1,073 MW over
+the 7 RTOs; those differ by an order of magnitude simply because RTOs are far
+larger, which is why MASE rather than MAE is the headline metric.
+
+**You do not need a new checkpoint.** Retraining on the forecast channel buys
+only ~1%, so the published `surge-fm-v3` captures essentially the whole gain
+provided you feed it a real forecast. What to send is documented on the
+[model card](https://huggingface.co/Tylerbry1/surge-fm-v3).
 
 All numbers: 2025 hold-out (exactly 8,760 h, pinned), rolling 24 h-ahead
 windows at step=24, MASE denominator = per-BA train-set seasonal-naive
 (m=24), store deduplicated on `(ts_utc, ba)`.
+
+### Where the weather data comes from
+
+`surge.scrapers.openmeteo` pulls **archived forecasts** from Open-Meteo's
+Previous Runs API — specifically `temperature_2m_previous_day1`, the value
+that was forecast for hour *t* roughly 24 h before *t*. That is genuinely
+knowable at day-ahead forecast time, unlike the observed ASOS series this
+repo used to pass over the horizon.
+
+Both temperature channels come from the same Open-Meteo grid point. Taking
+history from an ASOS station and the future from a model centroid left a
+~5 °C discontinuity exactly at the forecast boundary for PJM, whose station
+(DCA) sits ~200 km from its load centroid. Measured day-ahead skill at the
+seven RTO centroids over 2025: **MAE 1.06–1.55 °C, correlation 0.983–0.990**,
+bias −0.40 to +0.20 °C.
+
+This also supersedes the ASOS backfill for the 46 non-RTO BAs. Open-Meteo
+serves any lat/lon, so those BAs went from a zero-filled weather channel to
+real history *and* forecasts; the past-channel switch alone was worth 2.0%
+before any forecast was added.
+
+    python scripts/backfill_weather_forecast.py --bas all --start 2021-03-01
 
 ### Perfect-foresight ceiling, for reference only
 
