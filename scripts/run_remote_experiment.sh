@@ -11,11 +11,12 @@
 # research_eval.py, so every candidate is judged by the same referee.
 set -uo pipefail
 
-POD_HOST="${SURGE_POD_HOST:-root@213.173.103.224}"
-POD_PORT="${SURGE_POD_PORT:-39713}"
+POD_HOST="${SURGE_POD_HOST:-root@74.2.96.9}"
+POD_PORT="${SURGE_POD_PORT:-18067}"
 POD_KEY="${SURGE_POD_KEY:-$HOME/.ssh/id_ed25519}"
 POD_REPO="${SURGE_POD_REPO:-/workspace/surge}"
-POD_DATA="${SURGE_POD_DATA:-/root/data}"
+# /workspace is local NVMe on this pod, so the data store lives there.
+POD_DATA="${SURGE_POD_DATA:-/workspace/data}"
 
 EXP_NAME="${1:?usage: run_remote_experiment.sh <exp_name> <config_json>}"
 CONFIG_JSON="${2:-{\}}"
