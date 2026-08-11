@@ -112,6 +112,41 @@ def _fetch_window(lat: float, lon: float, start: date, end: date,
 
 LIVE_BASE = "https://api.open-meteo.com/v1/forecast"
 
+# Major load centres per RTO, (lat, lon).
+#
+# A single BA centroid is a poor stand-in for a multi-state footprint: ISO-NE's
+# centroid lands in New Hampshire while its demand sits in Boston and
+# Connecticut, and PJM's covers thirteen states from one point in the West
+# Virginia highlands. FETS handles the same problem by sampling 16 NUTS1
+# centroids for Germany rather than one national point.
+#
+# These are the largest metropolitan load centres inside each footprint, which
+# approximates a demand-weighted average of the weather the load actually sees.
+LOAD_CENTERS: dict[str, list[tuple[float, float]]] = {
+    "PJM":  [(39.95, -75.16), (38.90, -77.04), (41.88, -87.63),
+             (40.44, -79.996), (39.29, -76.61), (40.74, -74.17)],
+    "CISO": [(34.05, -118.24), (37.77, -122.42), (32.72, -117.16),
+             (38.58, -121.49), (36.75, -119.77)],
+    "ERCO": [(29.76, -95.37), (32.78, -96.80), (30.27, -97.74),
+             (29.42, -98.49), (31.76, -106.49)],
+    "MISO": [(44.98, -93.27), (42.33, -83.05), (38.63, -90.20),
+             (39.77, -86.16), (43.04, -87.91)],
+    "NYIS": [(40.71, -74.01), (42.89, -78.88), (42.65, -73.76),
+             (43.16, -77.61)],
+    "ISNE": [(42.36, -71.06), (41.76, -72.69), (41.82, -71.41),
+             (43.66, -70.26), (42.10, -72.59)],
+    "SWPP": [(39.10, -94.58), (35.47, -97.52), (41.26, -95.93),
+             (36.15, -95.99), (37.69, -97.34)],
+}
+
+
+def centers_for(ba: str) -> list[tuple[float, float]]:
+    """Weather sampling points for a BA: load centres if known, else centroid."""
+    if ba in LOAD_CENTERS:
+        return LOAD_CENTERS[ba]
+    lon, lat = _bas.get(ba).centroid
+    return [(lat, lon)]
+
 
 def live_forecast(ba: str, *, past_days: int = 7, forecast_days: int = 2,
                   model: str = "gfs_seamless") -> pl.DataFrame:
@@ -125,66 +160,80 @@ def live_forecast(ba: str, *, past_days: int = 7, forecast_days: int = 2,
 
     Columns: ts_utc, temp_c, rad_wm2, wind100.
     """
-    meta = _bas.get(ba)
-    lon, lat = meta.centroid
-    params = {
-        "latitude": lat,
-        "longitude": lon,
-        "hourly": "temperature_2m,shortwave_radiation,wind_speed_100m",
-        "past_days": int(past_days),
-        "forecast_days": int(forecast_days),
-        "models": model,
-        "timezone": "UTC",
-    }
-    with client() as c:
-        r = get(c, LIVE_BASE, params=params, timeout=30.0)
-    h = (r.json() or {}).get("hourly") or {}
-    times = h.get("time") or []
-    if not times:
-        return pl.DataFrame(schema={"ts_utc": pl.Datetime(time_zone="UTC"),
-                                    "temp_c": pl.Float64, "rad_wm2": pl.Float64,
-                                    "wind100": pl.Float64})
-    n = len(times)
-    return (
-        pl.DataFrame({
-            "ts_utc": times,
-            "temp_c": h.get("temperature_2m") or [None] * n,
-            "rad_wm2": h.get("shortwave_radiation") or [None] * n,
-            "wind100": h.get("wind_speed_100m") or [None] * n,
-        })
-        .with_columns(
-            pl.col("ts_utc").str.to_datetime().dt.replace_time_zone("UTC"),
-            pl.col("temp_c").cast(pl.Float64),
-            pl.col("rad_wm2").cast(pl.Float64),
-            pl.col("wind100").cast(pl.Float64),
+    empty = pl.DataFrame(schema={"ts_utc": pl.Datetime(time_zone="UTC"),
+                                 "temp_c": pl.Float64, "rad_wm2": pl.Float64,
+                                 "wind100": pl.Float64})
+    # Same load-centre averaging as the archive path. Serving and evaluation must
+    # build this channel identically, or the model meets a covariate at inference
+    # that differs from the one it was scored on.
+    frames = []
+    for lat, lon in centers_for(ba):
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": "temperature_2m,shortwave_radiation,wind_speed_100m",
+            "past_days": int(past_days),
+            "forecast_days": int(forecast_days),
+            "models": model,
+            "timezone": "UTC",
+        }
+        with client() as c:
+            r = get(c, LIVE_BASE, params=params, timeout=30.0)
+        h = (r.json() or {}).get("hourly") or {}
+        times = h.get("time") or []
+        if not times:
+            continue
+        n = len(times)
+        frames.append(
+            pl.DataFrame({
+                "ts_utc": times,
+                "temp_c": h.get("temperature_2m") or [None] * n,
+                "rad_wm2": h.get("shortwave_radiation") or [None] * n,
+                "wind100": h.get("wind_speed_100m") or [None] * n,
+            })
+            .with_columns(
+                pl.col("ts_utc").str.to_datetime().dt.replace_time_zone("UTC"),
+                pl.col("temp_c").cast(pl.Float64),
+                pl.col("rad_wm2").cast(pl.Float64),
+                pl.col("wind100").cast(pl.Float64),
+            )
         )
-        .sort("ts_utc")
-    )
+    if not frames:
+        return empty
+    return (pl.concat(frames).group_by("ts_utc").agg(pl.all().mean()).sort("ts_utc"))
 
 
 def fetch_ba(ba: str, start: date, end: date, *, lead_days: int = 1,
              model: str = "gfs_seamless", persist: bool = True) -> pl.DataFrame:
     """Day-ahead forecast temperature for `ba`'s centroid over [start, end]."""
-    meta = _bas.get(ba)
-    lon, lat = meta.centroid          # registry stores (lon, lat)
     start = max(start, ARCHIVE_START)
     if start > end:
         raise ValueError(f"{ba}: start {start} is after end {end}")
 
+    # Average over the BA's load centres rather than a single centroid, so the
+    # channel reflects the weather the demand actually experiences.
+    points = centers_for(ba)
     frames: list[pl.DataFrame] = []
-    cursor = start
-    while cursor <= end:
-        chunk_end = min(end, cursor + timedelta(days=CHUNK_DAYS - 1))
-        part = _fetch_window(lat, lon, cursor, chunk_end,
-                             lead_days=lead_days, model=model)
-        if not part.is_empty():
-            frames.append(part)
-        cursor = chunk_end + timedelta(days=1)
-        if cursor <= end:
-            time.sleep(1.0)           # courtesy pause between chunks
+    for lat, lon in points:
+        cursor = start
+        while cursor <= end:
+            chunk_end = min(end, cursor + timedelta(days=CHUNK_DAYS - 1))
+            part = _fetch_window(lat, lon, cursor, chunk_end,
+                                 lead_days=lead_days, model=model)
+            if not part.is_empty():
+                frames.append(part)
+            cursor = chunk_end + timedelta(days=1)
+            if cursor <= end:
+                time.sleep(0.5)       # courtesy pause between chunks
 
     if frames:
-        df = pl.concat(frames).unique(subset=["ts_utc"]).sort("ts_utc")
+        # Mean across load centres per hour. Averaging (rather than keeping each
+        # point as its own channel) keeps the covariate count unchanged, so this
+        # is comparable to the single-point runs.
+        df = (pl.concat(frames)
+                .group_by("ts_utc")
+                .agg(pl.all().mean())
+                .sort("ts_utc"))
     else:
         df = pl.DataFrame(schema={
             "ts_utc": pl.Datetime(time_zone="UTC"),
