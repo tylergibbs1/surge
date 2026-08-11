@@ -394,8 +394,10 @@ figures are upper bounds rather than achievable forecasts.
 - [ ] Conformal calibration in the serving path. Split-conformal on the
       validation split moves interval coverage from 0.750 to 0.8125 against a
       nominal 0.80, and costs nothing in point accuracy because it moves only
-      the outer quantile pair. It is implemented in the evaluation harness and
-      is not yet wired into the API
+      the outer quantile pair. The API now applies a per-BA delta
+      (`surge.api.conformal`), and `scripts/compute_conformal_deltas.py` fits
+      the table. The table itself is not built yet, so serving is still
+      uncalibrated and logs one warning for each BA
 - [ ] Close the ISO-NE gap. It is the one RTO whose own day-ahead forecast still
       beats surge (0.339 against 0.603). Multi-point weather improved ISO-NE by
       7.8% and did not close it, so weather granularity is not the cause.
