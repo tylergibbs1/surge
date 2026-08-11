@@ -1,0 +1,58 @@
+# Experiment log for the honest-accuracy + forecast-weather work (Aug 2026).
+# Tracked copy of the auto-research loop's results.tsv, which is gitignored so it
+# survives git resets during the loop. Preserved here because it is the only record
+# of what was tried and rejected, including negative results that would otherwise be
+# re-attempted: crude temperature proxies, special-day features, longer context,
+# and weight-space model soup all measured WORSE and are not dead ends worth revisiting
+# without new information.
+#
+# val_mase is validation (calendar 2024) unless status is TEST/CONFIRM (2025 hold-out).
+commit	val_mase	holdout_gap	cov_pi80	status	description
+3e92522	0.6287	-0.0681	0.7123	keep	baseline: v3 + persistence temp (all53 val)
+-	0.6091	-0.0661	0.7277	ref	reference bar: v3 + future_mode=none (no future temp at all)
+5a1cfc2	0.6142	-0.0684	0.7141	keep	exp1: lag24 temp (same-hour-yesterday) -2.3% vs baseline, still >0.6091 bar
+c913c7a	0.6200	-0.0736	0.7146	discard	exp2: lag24_anchored - level correction adds noise, worse than plain lag24
+68538d7	0.6240	-0.0695	0.7092	discard	exp3: climatology - right shape, wrong level; worse than lag24
+2b531c1	0.5996	-0.0619	0.7343	keep	exp4: +2 peer-BA past load, BEATS 0.6091 bar (-1.6%), holdout also improved
+e2899cb	0.5954	-0.0596	0.7382	keep	exp5: 4 peer BAs, better than 2 (-0.7%)
+feb835f	0.5930	-0.0574	0.7422	keep	exp6: 8 peer BAs, -0.4% vs 4 (diminishing returns)
+-	-	-	-	defer	robust outlier filter: correctness fix, NOT run here - it changes MASE denominators and would break metric comparability across experiments
+5e9e163	0.5931	-0.0575	0.7455	discard	exp7: 16 peers - equal to 8 (0.5930) but 2.6x slower; plateau at 8
+4c71473	0.5935	-0.0577	0.7448	keep	exp8: uniform covariate schema - metric-neutral (vs 0.5930), required for fit(); NEW reference for v4
+-	0.6058	-0.0553	0.7773	discard	exp9: LoRA-from-base 500st causal - worse than v3 (0.5935); undertrained vs v3 full FT. Best cov_pi80 yet
+-	0.5915	-0.0566	0.7492	keep?	exp10: LoRA-on-v3 500st causal - 0.34% better than v3 (0.5935) but within CI; needs paired check
+-	0.5868	-0.0547	0.7534	keep	exp11: LoRA-on-v3 2000st causal, -1.1% vs v3; holdout 0.5455 also better
+-	0.5829	-0.0533	0.7665	keep	exp12: LoRA-on-v3 5000st causal, -1.8% vs v3; monotone in steps
+-	pending	-	-	running	exp13: LoRA-on-v3, 15k LR schedule, best@step2600 eval_loss 0.12206 (best of any run)
+-	-	-	-	note	num_steps changes the LR SCHEDULE not just duration: 2000st->best@1200 loss .12716 | 5000st->best@3100 .12364 | 15000st->best@2600 .12206. Longer budget = slower decay = better optimum
+-	-	-	-	note	checkpoint writes to /workspace (network FS) slow training 14->2 steps/s; write ckpts to /root local disk in future runs
+-	0.5825	-0.0532	0.7763	equal	exp13: 15k-schedule best (eval_loss .12206) = 0.5825, TIED with 5000st 0.5829; eval_loss gain did NOT transfer to MASE. Prefer cheaper 5000st recipe
+45fad28	0.5829	-0.0533	-	keep	exp14: perf fix regression check - metrics IDENTICAL to exp12; wall 13m21s -> 3m05s
+-	0.5825	-0.0532	0.7714	equal	exp15: model soup (v7+v8 weight avg) = 0.5825, no gain over either parent; PLATEAU confirmed
+-	-	-	-	note	temp-forecast training blocked: chronos fit() slices future covariates from the same realized series, so training always sees oracle temp. Feeding a genuine forecast needs HRRR archives or a custom training loop
+-	0.6094	-	0.7483	TEST	CONFIRM before: v3+peers, all53 TEST2025, CI[0.6019,0.6181]
+-	0.5966	-	0.7691	TEST	CONFIRM after: LoRA-on-v3 causal+peers, all53 TEST2025, CI[0.5896,0.6041] = -2.1%
+-	0.5804	-	0.7503	TEST	CONFIRM before rto7 TEST2025
+-	0.5720	-	0.7635	TEST	CONFIRM after rto7 TEST2025 = -1.4%
+-	-	-	-	note	val -1.8% (0.5935->0.5829) vs test -2.1% (0.6094->0.5966): gain TRANSFERRED, no val overfitting
+-	0.5908	-	0.7950	TEST	SOTA CHECK: amazon/chronos-2 ZERO-SHOT + peer covariates, rto7 TEST2025, CI[0.5723,0.6085]. Our best 0.5720 CI[0.5555,0.5877] -> only 3.2% better, CIs OVERLAP. Zero-shot is also BETTER calibrated (0.795 vs 0.764 on nominal 0.80)
+-	-	-	-	note	CONTAMINATION PROBE (Jan-Apr, same season, adjacent yrs, 756 windows): zeroshot 0.5889->0.6339 (+7.6%), ours 0.5669->0.6125 (+8.0%). Margin 3.7%->3.4%. No differential degradation => no evidence Chronos-2 memorised 2025. Both drift ~8% into 2026 => concept drift is real, argues for continuous retraining
+-	0.5507	-	-	val	FORECAST PHASE control A: re-adapted + peers, no future weather (rto7 val)
+-	0.5404	-	0.7567	val	FORECAST PHASE control B: zeroshot + same forecast covariates (rto7 val)
+-	0.5004	-	0.7248	val	FORECAST PHASE best: re-adapted + REAL day-ahead forecast (rto7 val) -9.1% vs control A, beats zeroshot+forecast by 7.4% with NON-overlapping CIs
+-	0.5366	-	0.7126	TEST	CONFIRM forecast: rto7 TEST2025 CI[0.5223,0.5509] vs 0.5720 no-weather = -6.2%; TARGET was <=0.52 -> MISSED by 0.017
+-	0.5636	-	0.7568	TEST	CONFIRM control: zeroshot + same forecast, rto7 TEST2025 CI[0.5474,0.5803] -> we beat it by 4.8%, CIs barely overlap
+-	0.5710	-0.0510	0.7694	val	ALL53 control: analysis_only (OpenMeteo past, no future temp) - past-channel switch alone worth 2.0% vs 0.5829
+-	0.5329	-0.0565	0.7124	val	ALL53 candidate: + REAL forecast, CI[0.5248,0.5431] vs control CI[0.5621,0.5819] NON-OVERLAPPING = -6.7%; holdout 0.5325->0.4903
+-	0.5656	-	0.7363	val	ALL53 control: zeroshot + same forecast, CI[0.5568,0.576] -> we beat it by 5.8%, NON-OVERLAPPING
+-	0.5407	-0.0665	0.7051	TEST	CONFIRM ALL53 forecast weather: TEST2025 CI[0.5337,0.5475] MAE 251.6 vs 0.5966 no-weather = -9.4%; holdout 0.4905
+-	0.5245	-0.0588	0.6894	val	RETRAIN on forecast channel (2021-03..2023, inner-val 2023): all53 val, -1.6% vs 0.5329, holdout 0.4801
+-	0.5323	-	0.6838	TEST	FINAL all53 TEST2025 CI[0.5254,0.5394] MAE 249.1 = -10.8% vs 0.5966
+-	0.5321	-	0.6968	TEST	FINAL rto7 TEST2025 CI[0.5184,0.5459] MAE 1080.2 = -7.0% vs 0.5720; target 0.52 still missed by 0.012
+-	-	-	-	note	CALIBRATION DEGRADES with each fine-tune step: zeroshot 0.795, v3 0.764, +forecast 0.705, retrained 0.684 vs nominal 0.80
+-	0.5090	-	0.7194	val	context 4096 (rto7 val, forecast wx) - WORSE than 2048 (0.5038)
+-	0.5104	-	0.7404	val	context 8192 - also worse. KIT ablation (longer context helps) does NOT transfer: their finding was zero-shot, ours is fine-tuned AT 2048. Note cov_pi80 improves with context (0.712->0.740)
+-	0.5625	-	0.7334	val	special-day features (is_bridge, hol_prox) on v3: WORSE than 0.5604 without. Default OFF
+-	0.5726	-	0.7793	val	special-day features on ZERO-SHOT: also worse (0.5713 without) -> features carry no signal for either model at 24h on US RTOs; KIT finding was longer horizons on German TSO load
+-	0.5804	-	0.7501	TEST	conformal OFF (rto7 test, none): cov80 0.7501, crps 375.60
+-	0.5804	-	0.8125	TEST	conformal ON (CQR, calibrated on val): cov80 0.7501->0.8125 (nominal 0.80), crps 375.60->374.40, MASE UNCHANGED. Fixes the worst defect at zero cost to point accuracy; now better calibrated than zero-shot (0.795)
