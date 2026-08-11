@@ -16,6 +16,7 @@ import numpy as np
 import polars as pl
 
 from surge import store
+from surge.clean import clean_load
 
 # Prefer HF Hub (so users don't need to download 478 MB before running). If
 # a local path override is set, use that (e.g. during offline dev or CI).
@@ -86,9 +87,9 @@ def _load_ba(ba: str) -> dict[str, Any]:
               .select("ts_utc", "load_mw")
               .sort("ts_utc")
               .collect())
-    load = load.with_columns(
-        pl.when(pl.col("load_mw") > 200_000).then(None).otherwise(pl.col("load_mw")).alias("load_mw")
-    )
+    # Same robust rejection as the evaluation path, so the context the model sees
+    # in production matches the one it was scored on.
+    load = clean_load(load, "load_mw")
     weather = (store.scan("weather_hourly", dedupe_on=["ts_utc", "ba"])
                  .filter(pl.col("ba") == ba)
                  .select("ts_utc", "temp_c")

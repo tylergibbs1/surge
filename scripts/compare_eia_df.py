@@ -23,6 +23,7 @@ import numpy as np
 import polars as pl
 
 from surge import store
+from surge.clean import clean_load
 
 HDRS = {
     "User-Agent": "surge-playground/1.0 (+github.com/tylergibbs1/surge)",
@@ -93,9 +94,9 @@ def _train_denom(ba: str) -> float:
         .sort("ts_utc")
         .collect()
     )
-    df = df.with_columns(
-        pl.when(pl.col("load_mw") > 200_000).then(None).otherwise(pl.col("load_mw")).alias("load_mw")
-    )
+    # Must match the cleaning used by experiments/features.py, or the two sides of
+    # this head-to-head are normalised by different denominators.
+    df = clean_load(df, "load_mw")
     y = df["load_mw"].to_numpy().astype(np.float64)
     years = df["ts_utc"].dt.year().to_numpy()
     train_end = int(np.searchsorted(years, 2024, side="left"))

@@ -46,6 +46,7 @@ import numpy as np
 import polars as pl
 
 from surge import store
+from surge.clean import clean_load
 
 
 US_HOLIDAYS = holidays.UnitedStates()
@@ -384,9 +385,10 @@ def _join_ba(ba: str, *, with_gen: bool = True,
               .select("ts_utc", "load_mw")
               .sort("ts_utc")
               .collect())
-    load = load.with_columns(
-        pl.when(pl.col("load_mw") > 200_000).then(None).otherwise(pl.col("load_mw")).alias("load_mw")
-    )
+    # Two-sided, per-BA robust rejection. The old absolute `> 200_000` rule could
+    # not distinguish a 70 GW spike in a 1.8 GW BA from a normal PJM afternoon,
+    # and being one-sided it let large negatives through untouched.
+    load = clean_load(load, "load_mw")
     weather = (store.scan("weather_hourly", dedupe_on=["ts_utc", "ba"])
                  .filter(pl.col("ba") == ba)
                  .select("ts_utc", "temp_c")
