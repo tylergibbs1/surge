@@ -1,7 +1,7 @@
 """Archived day-ahead weather *forecasts* via Open-Meteo's Previous Runs API.
 
     ts_utc, ba, temp_c_fcst, temp_c_anal, rad_wm2_fcst, wind100_fcst,
-    lead_hours, source, as_of
+    temp_spread_c, lead_hours, source, as_of
 
 Why a separate dataset from `weather_hourly`
 --------------------------------------------
@@ -54,13 +54,19 @@ def _fetch_window(lat: float, lon: float, start: date, end: date,
     # centroid is in the WV mountains; its station is DCA), which would leave a
     # multi-degree discontinuity where the past covariate meets the future one.
     # Taking both channels from one source keeps them coherent.
+    # Ask three independent NWP models for the same day-ahead temperature. Their
+    # disagreement is a causal measure of how uncertain tomorrow's weather is,
+    # which a single deterministic run cannot express — the load model can use it
+    # to widen its own intervals on genuinely uncertain days instead of applying
+    # one constant widening everywhere.
+    spread_models = [model, "icon_seamless", "ecmwf_ifs025"]
     params = {
         "latitude": lat,
         "longitude": lon,
         "hourly": f"temperature_2m,{var},{rad},{wnd}",
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
-        "models": model,
+        "models": ",".join(spread_models),
         "timezone": "UTC",
     }
     with client() as c:
@@ -68,11 +74,27 @@ def _fetch_window(lat: float, lon: float, start: date, end: date,
     hourly = (r.json() or {}).get("hourly") or {}
     times = hourly.get("time") or []
     n = len(times)
+
+    def pick(base: str, mdl: str | None = None):
+        """Open-Meteo suffixes variable names per model when several are asked for."""
+        for key in ((f"{base}_{mdl}",) if mdl else ()) + (base,):
+            if hourly.get(key):
+                return hourly[key]
+        return [None] * n
+
+    # Spread across the three models, per hour, ignoring absent members.
+    members = [pick(var, m) for m in spread_models]
+    spread = []
+    for i in range(n):
+        vals = [m[i] for m in members if i < len(m) and m[i] is not None]
+        spread.append(max(vals) - min(vals) if len(vals) >= 2 else None)
+
     cols = {
-        "temp_c_fcst": hourly.get(var) or [None] * n,
-        "temp_c_anal": hourly.get("temperature_2m") or [None] * n,
-        "rad_wm2_fcst": hourly.get(rad) or [None] * n,
-        "wind100_fcst": hourly.get(wnd) or [None] * n,
+        "temp_c_fcst": pick(var, model),
+        "temp_c_anal": pick("temperature_2m", model),
+        "rad_wm2_fcst": pick(rad, model),
+        "wind100_fcst": pick(wnd, model),
+        "temp_spread_c": spread,
     }
     schema = {"ts_utc": pl.Datetime(time_zone="UTC"),
               **{k: pl.Float64 for k in cols}}
@@ -115,7 +137,8 @@ def fetch_ba(ba: str, start: date, end: date, *, lead_days: int = 1,
         df = pl.DataFrame(schema={
             "ts_utc": pl.Datetime(time_zone="UTC"),
             "temp_c_fcst": pl.Float64, "temp_c_anal": pl.Float64,
-            "rad_wm2_fcst": pl.Float64, "wind100_fcst": pl.Float64})
+            "rad_wm2_fcst": pl.Float64, "wind100_fcst": pl.Float64,
+            "temp_spread_c": pl.Float64})
 
     df = df.with_columns(
         pl.lit(ba).alias("ba"),

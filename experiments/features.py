@@ -140,14 +140,20 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-FUTURE_MODES = ("persistence", "lag24", "forecast", "analysis_only",
-                "none", "oracle", "oracle_om")
+FUTURE_MODES = ("persistence", "lag24", "forecast", "forecast_full",
+                "analysis_only", "none", "oracle", "oracle_om")
 
 # Modes whose PAST temperature channel comes from Open-Meteo rather than ASOS.
 # "forecast" and its control must share the same past channel, otherwise a
 # comparison between them conflates two changes: a new future channel and a
 # new past one.
-_OPENMETEO_PAST_MODES = frozenset({"forecast", "analysis_only", "oracle_om"})
+_OPENMETEO_PAST_MODES = frozenset({"forecast", "forecast_full",
+                                  "analysis_only", "oracle_om"})
+
+# Extra forecast channels beyond temperature: causal proxies for the realized
+# wind/solar generation this repo used to leak, plus a cross-model spread that
+# says how uncertain tomorrow's weather actually is.
+FCST_EXTRA_KEYS = ("rad_fcst", "wind_fcst", "temp_spread")
 
 # Toggle for the special-day features so an A/B against the previous schema is
 # possible; the covariate set changes, so results are not comparable across it.
@@ -206,6 +212,14 @@ def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
         policy["temp_c"] = "forecast"
         for c in gen_cols:
             policy[c] = "past_only"
+    elif mode == "forecast_full":
+        # Temperature forecast plus forecast irradiance, 100 m wind and the
+        # cross-model temperature spread. All are genuine day-ahead forecasts.
+        policy["temp_c"] = "forecast"
+        for k in FCST_EXTRA_KEYS:
+            policy[k] = "fcst_extra"
+        for c in gen_cols:
+            policy[c] = "past_only"
     elif mode == "oracle_om":
         # Perfect foresight of the SAME Open-Meteo channel the forecast mode
         # uses. This is the meaningful ceiling for that configuration: the old
@@ -248,6 +262,15 @@ class BAData:
     # value for hour t was issued ~24 h before t, so slicing it over a horizon of
     # 24 h or less reads only information available at forecast time.
     temp_fcst: np.ndarray | None = None
+    # Additional forecast channels, keyed by covariate name. Held outside
+    # `covariates` for the same reason as temp_fcst: they are forecasts, not
+    # realized observations, so the causal guard must not treat them as actuals.
+    fcst_extra: dict[str, np.ndarray] | None = None
+    # Lead time of the forecast channels, in hours. The guard cannot validate a
+    # forecast channel (it is not a realized series), so causality is enforced
+    # here instead: a channel forecast N hours ahead may only be served over a
+    # horizon of at most N hours.
+    fcst_lead_hours: int = 0
     # First index with real forecast coverage. Training must not sample before
     # this, or it falls back to observed temperature and recreates exactly the
     # train/serve mismatch this channel exists to remove.
@@ -268,6 +291,21 @@ class BAData:
             "past_covariates": {k: v[start:end] for k, v in self.covariates.items()},
         }
 
+    def _assert_lead(self, horizon: int, key: str) -> None:
+        """A forecast issued N hours ahead cannot cover a horizon longer than N.
+
+        Without this, evaluating at horizon=48 against a `previous_day1` channel
+        (24 h lead) would quietly serve values that were not yet forecast at the
+        origin — a leak the causal guard cannot see, because a forecast series is
+        not a realized one.
+        """
+        if self.fcst_lead_hours and horizon > self.fcst_lead_hours:
+            raise ValueError(
+                f"{self.ba}: covariate {key!r} has a {self.fcst_lead_hours}h forecast "
+                f"lead but the horizon is {horizon}h. Re-fetch with "
+                f"--lead-days {int(np.ceil(horizon / 24))} or shorten the horizon."
+            )
+
     def future_at(self, origin: int, horizon: int) -> dict[str, np.ndarray]:
         """Future covariates for the window [origin, origin+horizon), per policy.
 
@@ -286,7 +324,15 @@ class BAData:
                 out[k] = np.full(horizon, last, dtype=v.dtype)
             elif pol == "lag24":
                 out[k] = v[_lag_idx(origin, horizon, len(v))]
+            elif pol == "fcst_extra":
+                self._assert_lead(horizon, k)
+                if not self.fcst_extra or k not in self.fcst_extra:
+                    raise ValueError(
+                        f"{self.ba}: future_mode='forecast_full' needs {k}; re-run "
+                        "scripts/backfill_weather_forecast.py")
+                out[k] = self.fcst_extra[k][origin:origin + horizon]
             elif pol == "forecast":
+                self._assert_lead(horizon, k)
                 if self.temp_fcst is None:
                     raise ValueError(
                         f"{self.ba}: future_mode='forecast' needs weather_fcst_hourly — "
@@ -341,7 +387,9 @@ def _join_ba(ba: str, *, with_gen: bool = True,
     try:
         wx_fcst = (store.scan("weather_fcst_hourly", dedupe_on=["ts_utc", "ba"])
                      .filter(pl.col("ba") == ba)
-                     .select("ts_utc", "temp_c_fcst", "temp_c_anal")
+                     .select("ts_utc", "temp_c_fcst", "temp_c_anal",
+                             "rad_wm2_fcst", "wind100_fcst", "temp_spread_c",
+                             "lead_hours")
                      .sort("ts_utc")
                      .collect())
     except Exception:
@@ -386,7 +434,9 @@ def _join_ba(ba: str, *, with_gen: bool = True,
     # temperature purely so the array is well-formed; `fcst_start` marks where
     # real forecast coverage begins and training must not sample before it.
     temp_fcst = None
+    fcst_extra = None
     fcst_start = 0
+    fcst_lead_hours = 0
     if wx_fcst is not None and wx_fcst.height:
         src_ts = wx_fcst["ts_utc"].to_numpy()
         src_v = wx_fcst["temp_c_fcst"].to_numpy().astype(np.float64)
@@ -415,6 +465,35 @@ def _join_ba(ba: str, *, with_gen: bool = True,
                 anal[:fcst_start] = temp[:fcst_start]
                 covariates["temp_c"] = anal.astype(np.float32)
 
+            # Extra forecast channels. Each is stored twice on purpose: in
+            # `covariates` so the model sees its history, and in `fcst_extra` so
+            # future_at can serve it over the horizon. The guard perturbs only the
+            # `covariates` copy, which is correct — these are forecasts, and their
+            # causality comes from the lead time (see lead_hours), not from being
+            # withheld.
+            src_cols = {"rad_fcst": "rad_wm2_fcst",
+                        "wind_fcst": "wind100_fcst",
+                        "temp_spread": "temp_spread_c"}
+            extra: dict[str, np.ndarray] = {}
+            for name, col in src_cols.items():
+                if col not in wx_fcst.columns:
+                    continue
+                raw = wx_fcst[col].to_numpy().astype(np.float64)
+                al = np.where(hit, raw[idx], np.nan)
+                if np.all(np.isnan(al)):
+                    continue
+                al = _ffill_np(al)
+                al[:fcst_start] = al[fcst_start] if fcst_start < len(al) else 0.0
+                arr = al.astype(np.float32)
+                extra[name] = arr
+                covariates[name] = arr
+            if extra:
+                fcst_extra = extra
+            if "lead_hours" in wx_fcst.columns:
+                lead = wx_fcst["lead_hours"].drop_nulls()
+                if len(lead):
+                    fcst_lead_hours = int(lead.min())
+
     future_policy = _resolve_policy(future_mode, gen_cols)
 
     years = j["ts_utc"].dt.year().to_numpy()
@@ -432,7 +511,8 @@ def _join_ba(ba: str, *, with_gen: bool = True,
         ba=ba, ts_utc=ts, target=target.astype(np.float32),
         covariates=covariates, future_policy=future_policy, future_mode=future_mode,
         train_end=train_end, val_end=val_end, test_end=test_end, denom_mae=denom,
-        temp_fcst=temp_fcst, fcst_start=fcst_start,
+        temp_fcst=temp_fcst, fcst_extra=fcst_extra, fcst_start=fcst_start,
+        fcst_lead_hours=fcst_lead_hours,
     )
 
 

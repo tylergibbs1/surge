@@ -18,6 +18,11 @@ POD_REPO="${SURGE_POD_REPO:-/workspace/surge}"
 # /workspace is local NVMe on this pod, so the data store lives there.
 POD_DATA="${SURGE_POD_DATA:-/workspace/data}"
 
+# `surge` lives under src/, so both the repo root (for `experiments`) and src/
+# (for `surge`) go on PYTHONPATH. Deliberately not `pip install -e .`: an
+# earlier pod ended up with a stale duplicate package shadowing the real one,
+# and two backfills silently ran old code before it was caught.
+
 EXP_NAME="${1:?usage: run_remote_experiment.sh <exp_name> <config_json>}"
 CONFIG_JSON="${2:-{\}}"
 
@@ -35,7 +40,7 @@ rsync -rlptz -e "ssh ${SSH_OPTS[*]}" \
   "$REPO_ROOT/src/" "$POD_HOST:$POD_REPO/src/" >/dev/null 2>&1
 
 ssh "${SSH_OPTS[@]}" "$POD_HOST" \
-  "cd $POD_REPO && SURGE_DATA_DIR=$POD_DATA PYTHONPATH=$POD_REPO PYTHONUNBUFFERED=1 \
+  "cd $POD_REPO && SURGE_DATA_DIR=$POD_DATA PYTHONPATH=$POD_REPO:$POD_REPO/src PYTHONUNBUFFERED=1 \
    python3 -m experiments.research_eval $(printf '%q' "$EXP_NAME") $(printf '%q' "$CONFIG_JSON")"
 rc=$?
 
