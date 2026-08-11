@@ -55,7 +55,8 @@ def main() -> None:
     t0 = time.time()
     m = rolling_eval_c2(pipe, bas, on=on, context=context, horizon=horizon,
                         batch_size=batch_size, bootstrap=bootstrap, seed=seed,
-                        per_step=cfg.get("per_step", False))
+                        per_step=cfg.get("per_step", False),
+                        conformal=cfg.get("conformal", False))
     eval_s = time.time() - t0
 
     sample = next(iter(bas.values()), None)
@@ -63,6 +64,7 @@ def main() -> None:
         "exp": exp_name, "base": base, "bas": bas_list, "on": on,
         "context": context, "horizon": horizon,
         "future_mode": future_mode,
+        "conformal": cfg.get("conformal", False),
         "future_keys": sample.future_keys if sample else [],
         "leaks_future": bool(sample.leaks_future) if sample else False,
         "load_s": round(load_s, 2), "eval_s": round(eval_s, 2),

@@ -20,8 +20,19 @@ import copy
 import numpy as np
 
 # Deterministic functions of the timestamp — knowable arbitrarily far ahead.
+#
+# ADMISSION RULE: a name belongs here only if its value at index i is computed
+# solely from `ts_utc[i]` (plus fixed reference data such as a holiday
+# calendar), with no dependence on any measured series. This list is
+# deliberately explicit rather than pattern-matched — a prefix rule like "cal_*"
+# would let a leaky covariate be smuggled in by naming. Every addition should be
+# checkable by reading `experiments.features._calendar`, and
+# `assert_timestamp_only` below tests the property empirically.
 CALENDAR_EXEMPT = frozenset({
     "hour_sin", "hour_cos", "dow_sin", "dow_cos", "is_weekend", "is_holiday",
+    # Special-day structure: bridge days and signed proximity to the nearest
+    # holiday. Both derive from the calendar alone.
+    "is_bridge", "hol_prox",
 })
 
 
@@ -80,6 +91,39 @@ def assert_causal(bd, origin: int, horizon: int, *, bump: float = 1e4) -> None:
         raise LeakageError(
             f"{getattr(bd, 'ba', '?')}: declared future_keys {sorted(missing)} were not "
             f"produced by future_at(); the eval config is inconsistent."
+        )
+
+
+def assert_timestamp_only(bd_a, bd_b) -> None:
+    """Verify every CALENDAR_EXEMPT covariate really is timestamp-determined.
+
+    Give it two BAData built over the *same* timestamps but different measured
+    data (different BAs, or the same BA with the target perturbed). Any exempt
+    feature that differs is not a pure function of the calendar and must not be
+    on the exempt list.
+    """
+    # Two BAs rarely share an identical index (differing coverage and gaps), so
+    # compare on the timestamps they have in common.
+    ts_a = np.asarray(bd_a.ts_utc).astype("datetime64[h]")
+    ts_b = np.asarray(bd_b.ts_utc).astype("datetime64[h]")
+    common, ia, ib = np.intersect1d(ts_a, ts_b, return_indices=True)
+    if common.size == 0:
+        raise ValueError("no overlapping timestamps; cannot compare exempt features")
+
+    offenders = []
+    for k in CALENDAR_EXEMPT:
+        va, vb = bd_a.covariates.get(k), bd_b.covariates.get(k)
+        if va is None or vb is None:
+            continue
+        if not np.allclose(np.asarray(va, dtype=np.float64)[ia],
+                           np.asarray(vb, dtype=np.float64)[ib],
+                           equal_nan=True):
+            offenders.append(k)
+    if offenders:
+        raise LeakageError(
+            f"exempt covariates {sorted(offenders)} differ between two BAs over "
+            f"identical timestamps, so they depend on measured data rather than "
+            f"the calendar alone. Remove them from CALENDAR_EXEMPT."
         )
 
 

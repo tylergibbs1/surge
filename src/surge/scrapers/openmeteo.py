@@ -1,6 +1,7 @@
 """Archived day-ahead weather *forecasts* via Open-Meteo's Previous Runs API.
 
-    ts_utc, ba, temp_c_fcst, temp_c_anal, lead_hours, source, as_of
+    ts_utc, ba, temp_c_fcst, temp_c_anal, rad_wm2_fcst, wind100_fcst,
+    lead_hours, source, as_of
 
 Why a separate dataset from `weather_hourly`
 --------------------------------------------
@@ -41,7 +42,13 @@ ARCHIVE_START = date(2021, 3, 1)
 
 def _fetch_window(lat: float, lon: float, start: date, end: date,
                   *, lead_days: int, model: str) -> pl.DataFrame:
+    # Renewable proxies alongside temperature. Realized wind/solar generation is
+    # never knowable ahead, but *forecast* irradiance and 100 m wind speed are,
+    # and they drive the same physics — so they are the causal substitute for the
+    # EIA actual-generation channels this repo used to leak.
     var = f"temperature_2m_previous_day{lead_days}"
+    rad = f"shortwave_radiation_previous_day{lead_days}"
+    wnd = f"wind_speed_100m_previous_day{lead_days}"
     # Fetch the analysis alongside the forecast, from the SAME grid point. The
     # observed ASOS station can sit hundreds of km from a BA's centroid (PJM's
     # centroid is in the WV mountains; its station is DCA), which would leave a
@@ -50,7 +57,7 @@ def _fetch_window(lat: float, lon: float, start: date, end: date,
     params = {
         "latitude": lat,
         "longitude": lon,
-        "hourly": f"temperature_2m,{var}",
+        "hourly": f"temperature_2m,{var},{rad},{wnd}",
         "start_date": start.isoformat(),
         "end_date": end.isoformat(),
         "models": model,
@@ -60,19 +67,22 @@ def _fetch_window(lat: float, lon: float, start: date, end: date,
         r = get(c, BASE, params=params, timeout=120.0)
     hourly = (r.json() or {}).get("hourly") or {}
     times = hourly.get("time") or []
-    vals = hourly.get(var) or []
-    anal = hourly.get("temperature_2m") or []
+    n = len(times)
+    cols = {
+        "temp_c_fcst": hourly.get(var) or [None] * n,
+        "temp_c_anal": hourly.get("temperature_2m") or [None] * n,
+        "rad_wm2_fcst": hourly.get(rad) or [None] * n,
+        "wind100_fcst": hourly.get(wnd) or [None] * n,
+    }
     schema = {"ts_utc": pl.Datetime(time_zone="UTC"),
-              "temp_c_fcst": pl.Float64, "temp_c_anal": pl.Float64}
+              **{k: pl.Float64 for k in cols}}
     if not times:
         return pl.DataFrame(schema=schema)
     return (
-        pl.DataFrame({"ts_utc": times, "temp_c_fcst": vals,
-                      "temp_c_anal": anal or [None] * len(times)})
+        pl.DataFrame({"ts_utc": times, **cols})
           .with_columns(
               pl.col("ts_utc").str.to_datetime().dt.replace_time_zone("UTC"),
-              pl.col("temp_c_fcst").cast(pl.Float64),
-              pl.col("temp_c_anal").cast(pl.Float64),
+              *[pl.col(k).cast(pl.Float64) for k in cols],
           )
           .drop_nulls("temp_c_fcst")
     )
@@ -102,9 +112,10 @@ def fetch_ba(ba: str, start: date, end: date, *, lead_days: int = 1,
     if frames:
         df = pl.concat(frames).unique(subset=["ts_utc"]).sort("ts_utc")
     else:
-        df = pl.DataFrame(schema={"ts_utc": pl.Datetime(time_zone="UTC"),
-                                   "temp_c_fcst": pl.Float64,
-                                   "temp_c_anal": pl.Float64})
+        df = pl.DataFrame(schema={
+            "ts_utc": pl.Datetime(time_zone="UTC"),
+            "temp_c_fcst": pl.Float64, "temp_c_anal": pl.Float64,
+            "rad_wm2_fcst": pl.Float64, "wind100_fcst": pl.Float64})
 
     df = df.with_columns(
         pl.lit(ba).alias("ba"),

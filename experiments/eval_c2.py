@@ -15,6 +15,64 @@ import torch
 from experiments.features import BAData, load_multi_ba
 
 
+def _predict_windows(pipe, bd: BAData, origins, *, context: int, horizon: int,
+                     q_levels: list[float], batch_size: int):
+    """Run the model over `origins`. Returns (quants (N,H,Q), truths (N,H))."""
+    q_out, t_out = [], []
+    for i in range(0, len(origins), batch_size):
+        batch = origins[i:i + batch_size]
+        tasks, truths = [], []
+        for o in batch:
+            tasks.append({
+                "target": bd.target[o - context:o].astype(np.float32),
+                "past_covariates": {k: v[o - context:o] for k, v in bd.covariates.items()},
+                "future_covariates": bd.future_at(o, horizon),
+            })
+            truths.append(bd.target[o:o + horizon].astype(np.float32))
+        quants_list, _ = pipe.predict_quantiles(
+            tasks, prediction_length=horizon, quantile_levels=q_levels,
+            batch_size=len(tasks))
+        q_out.append(torch.stack([q.squeeze(0) for q in quants_list]).float().cpu().numpy())
+        t_out.append(np.stack(truths))
+    if not q_out:
+        return np.empty((0, horizon, len(q_levels))), np.empty((0, horizon))
+    return np.concatenate(q_out), np.concatenate(t_out)
+
+
+def _conformal_delta(pipe, bd: BAData, *, on: str, context: int, horizon: int,
+                     step: int, q_levels: list[float], batch_size: int) -> float:
+    """Split-conformal (CQR) widening for the outer interval, fitted per BA.
+
+    Conformity score s = max(q_lo - y, y - q_hi); the returned delta is its
+    (1-alpha) empirical quantile with the finite-sample correction. Adding it to
+    q_hi and subtracting from q_lo restores nominal coverage.
+
+    Fitted on the split *before* the one being scored, so the calibration data is
+    never the evaluation data: scoring test (2025) calibrates on val (2024), and
+    scoring val calibrates on the tail of train.
+    """
+    if on == "test":
+        lo, hi = bd.train_end, bd.val_end
+    else:
+        lo, hi = max(bd.train_end - 8760, context), bd.train_end
+    origins = [o for o in range(lo, hi - horizon + 1, step) if o - context >= 0]
+    if not origins:
+        return 0.0
+
+    quants, truths = _predict_windows(pipe, bd, origins, context=context,
+                                      horizon=horizon, q_levels=q_levels,
+                                      batch_size=batch_size)
+    li, hi_i = q_levels.index(min(q_levels)), q_levels.index(max(q_levels))
+    scores = np.maximum(quants[..., li] - truths, truths - quants[..., hi_i])
+    scores = scores[~np.isnan(scores)]
+    if scores.size == 0:
+        return 0.0
+    alpha = 1.0 - (max(q_levels) - min(q_levels))
+    n = scores.size
+    level = min(np.ceil((n + 1) * (1 - alpha)) / n, 1.0)
+    return float(np.quantile(scores, level))
+
+
 def rolling_eval_c2(
     pipe,
     bas: dict[str, BAData],
@@ -28,9 +86,11 @@ def rolling_eval_c2(
     bootstrap: int = 0,
     seed: int = 0,
     per_step: bool = False,
+    conformal: bool = False,
 ) -> dict:
     q_levels = list(quantile_levels)
     per_ba: dict[str, dict[str, float]] = {}
+    conformal_deltas: dict[str, float] = {}
     all_mase_windows: list[np.ndarray] = []
     per_step_abs_by_ba: dict[str, np.ndarray] = {}
 
@@ -42,6 +102,13 @@ def rolling_eval_c2(
                    if o - context >= 0]
         if not origins:
             continue
+
+        delta = 0.0
+        if conformal:
+            delta = _conformal_delta(pipe, bd, on=on, context=context,
+                                     horizon=horizon, step=step,
+                                     q_levels=q_levels, batch_size=batch_size)
+            conformal_deltas[ba] = round(delta, 2)
 
         abs_err_list: list[np.ndarray] = []
         sq_err_list: list[np.ndarray] = []
@@ -71,6 +138,13 @@ def rolling_eval_c2(
                 batch_size=len(tasks),
             )
             quants = torch.stack([q.squeeze(0) for q in quants_list]).float().cpu().numpy()  # (B, H, Q)
+            if delta:
+                # Widen only the outer pair; the median is untouched, so MASE and
+                # MAE are unaffected and only coverage/CRPS move.
+                _lo_i = q_levels.index(min(q_levels))
+                _hi_i = q_levels.index(max(q_levels))
+                quants[..., _lo_i] -= delta
+                quants[..., _hi_i] += delta
             means  = torch.stack([m.squeeze(0) for m in means_list]).float().cpu().numpy()   # (B, H)
 
             diff = truths - means
@@ -122,6 +196,8 @@ def rolling_eval_c2(
     for k in cov_keys:
         macro[k] = float(np.mean([v[k] for v in per_ba.values()]))
     macro["per_ba"] = per_ba
+    if conformal_deltas:
+        macro["conformal_deltas_mw"] = conformal_deltas
     macro["n_bas"] = len(per_ba)
 
     if bootstrap > 0 and all_mase_windows:

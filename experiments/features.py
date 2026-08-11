@@ -37,6 +37,7 @@ be precomputed as a flat array — call `BAData.future_at(origin, horizon)`.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import date
 
@@ -86,6 +87,45 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     holiday = np.array([1.0 if date(d.year, d.month, d.day) in US_HOLIDAYS else 0.0
                         for d in day], dtype=np.float32)
 
+    # --- special-day structure -------------------------------------------
+    # A single is_holiday flag is not enough. The published weakness of
+    # covariate-informed TSFMs on transmission-level load is precisely that they
+    # miss the *indirect* effects around holidays — bridge days, long weekends,
+    # the run-up to a holiday — not the holiday itself (arXiv 2607.15705). The
+    # load-forecasting literature reports materially lower error when bridge and
+    # proximity days are encoded separately rather than lumped together.
+    #
+    # All of these are pure functions of the timestamp, so they are legitimately
+    # known arbitrarily far ahead and carry no leakage risk.
+    day_ord = ts.astype("datetime64[D]").astype(np.int64)
+    uniq_days, inv = np.unique(day_ord, return_inverse=True)
+    d_hol = np.zeros(len(uniq_days), dtype=bool)
+    d_wknd = np.zeros(len(uniq_days), dtype=bool)
+    for i, dnum in enumerate(uniq_days):
+        dt = np.datetime64(int(dnum), "D").astype("datetime64[s]").astype("O")
+        d_hol[i] = date(dt.year, dt.month, dt.day) in US_HOLIDAYS
+        d_wknd[i] = dt.weekday() >= 5
+
+    off = d_hol | d_wknd                      # "not a normal working day"
+    prev_off = np.concatenate([[False], off[:-1]])
+    next_off = np.concatenate([off[1:], [False]])
+    # A bridge day is a working day wedged between two non-working days.
+    d_bridge = (~off) & prev_off & next_off
+
+    # Signed distance in days to the nearest holiday, clipped to a week. Negative
+    # before, positive after, so the model can learn asymmetric run-up/run-down.
+    hol_idx = np.flatnonzero(d_hol)
+    if hol_idx.size:
+        pos = np.arange(len(uniq_days))
+        nearest = hol_idx[np.clip(np.searchsorted(hol_idx, pos), 0, hol_idx.size - 1)]
+        prev_h = hol_idx[np.clip(np.searchsorted(hol_idx, pos) - 1, 0, hol_idx.size - 1)]
+        d_next = nearest - pos
+        d_prev = pos - prev_h
+        signed = np.where(d_next <= d_prev, -d_next, d_prev).astype(np.float32)
+    else:
+        signed = np.full(len(uniq_days), 7.0, dtype=np.float32)
+    d_prox = np.clip(signed, -7, 7) / 7.0
+
     two_pi = 2 * np.pi
     return {
         "hour_sin": np.sin(two_pi * hour / 24).astype(np.float32),
@@ -94,6 +134,9 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
         "dow_cos":  np.cos(two_pi * dow / 7).astype(np.float32),
         "is_weekend": weekend,
         "is_holiday": holiday,
+        **({"is_bridge": d_bridge[inv].astype(np.float32),
+            "hol_prox": d_prox[inv].astype(np.float32)}
+           if SPECIAL_DAY_FEATURES else {}),
     }
 
 
@@ -106,8 +149,22 @@ FUTURE_MODES = ("persistence", "lag24", "forecast", "analysis_only",
 # new past one.
 _OPENMETEO_PAST_MODES = frozenset({"forecast", "analysis_only", "oracle_om"})
 
-CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
-                 "is_weekend", "is_holiday")
+# Toggle for the special-day features so an A/B against the previous schema is
+# possible; the covariate set changes, so results are not comparable across it.
+# Env-driven so a control run needs no file edit: SURGE_SPECIAL_DAYS=0.
+# Default OFF: measured slightly WORSE for both the fine-tune (0.5625 vs 0.5604)
+# and zero-shot Chronos-2 (0.5726 vs 0.5713) on the 7 RTOs at a 24 h horizon.
+# The documented TSFM weakness on special events (arXiv 2607.15705) was at
+# *longer* horizons on German TSO load, where school-holiday and industrial
+# effects are stronger; it does not transfer to US RTOs day-ahead. Kept behind
+# the flag because it may still pay off at longer horizons or with a retrain.
+SPECIAL_DAY_FEATURES = os.environ.get("SURGE_SPECIAL_DAYS", "0") != "0"
+
+_BASE_CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
+                       "is_weekend", "is_holiday")
+_SPECIAL_DAY_KEYS = ("is_bridge", "hol_prox")
+CALENDAR_KEYS = (_BASE_CALENDAR_KEYS + _SPECIAL_DAY_KEYS
+                 if SPECIAL_DAY_FEATURES else _BASE_CALENDAR_KEYS)
 
 
 def _lag_idx(origin: int, horizon: int, n: int, lag: int = 24) -> np.ndarray:
