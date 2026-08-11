@@ -28,8 +28,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import polars as pl
 
-from surge import store
 from surge import bas as _bas
+from surge import store
 from surge.scrapers.base import client, get
 
 BASE = "https://previous-runs-api.open-meteo.com/v1/forecast"

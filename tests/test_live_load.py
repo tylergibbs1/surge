@@ -110,11 +110,11 @@ def test_overlapping_ingest_does_not_double_aggregate(tmp_path, monkeypatch) -> 
     `store.append` writes a new parquet per call — so running `--days 7`
     and then `--days 120` literally writes the same row twice. Before the
     store-layer dedupe, the aggregate summed both copies and the "live US
-    demand" hero jumped to ~2× reality whenever backfill windows overlapped.
+    demand" hero jumped to ~2x reality whenever backfill windows overlapped.
     """
     monkeypatch.setenv("SURGE_DATA_DIR", str(tmp_path))
     _clear_cache()
-    # First ingest: 50 BAs × 3 hours at 1 GW each.
+    # First ingest: 50 BAs x 3 hours at 1 GW each.
     _write_full_coverage(tmp_path, n_hours=3, per_ba_mw=1000.0)
     single = asyncio.run(live_load.aggregate_load(hours=24))
     single_total = single["points"][-1]["total_mw"]

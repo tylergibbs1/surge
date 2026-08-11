@@ -106,3 +106,13 @@ module = [
     "surge.cache",
 ]
 ignore_errors = true
+
+# numpy's stubs use PEP 695 `type` statements, which mypy rejects while
+# python_version is 3.11 -- and requires-python is >=3.11, so lowering the
+# target would stop us catching real 3.11 breakage. Before numpy was a declared
+# dependency it was absent at check time and ignore_missing_imports made it
+# Any; skipping it here keeps exactly that behavior.
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+follow_imports = "skip"
+follow_imports_for_stubs = true

@@ -91,7 +91,11 @@ def test_read_zip_as_frames_decodes_csv_members() -> None:
     assert df["lmp"][0] == 42.5
 
 
-def test_fetch_report_applies_since_and_limit(monkeypatch) -> None:
+def test_fetch_report_applies_since_and_limit(monkeypatch, tmp_path) -> None:
+    # fetch_report persists by default and skips doc_ids already in the
+    # manifest, so without an isolated store this wrote DocID 111 into the real
+    # ~/.surge/data and then failed on every later run.
+    monkeypatch.setenv("SURGE_DATA_DIR", str(tmp_path))
     csv = "ts,value\n2026-01-01T00,1.0\n"
     zblob = _make_zip("payload.csv", csv)
 
