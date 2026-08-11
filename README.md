@@ -401,7 +401,19 @@ figures are upper bounds rather than achievable forecasts.
 - [ ] Close the ISO-NE gap. It is the one RTO whose own day-ahead forecast still
       beats surge (0.339 against 0.603). Multi-point weather improved ISO-NE by
       7.8% and did not close it, so weather granularity is not the cause.
-      Behind-the-meter solar is the next thing to test
+      Behind-the-meter solar is a real but partial cause. Two BAs report almost
+      no distributed solar to EIA-930: ISO-NE reports a mean of 94 MW against a
+      fleet of about 8,400 MWac, and New York reports exactly 0.0 MW for every
+      one of 61,541 hours. These are also the two RTOs with the largest
+      size-normalized error (4.50% and 3.10% of mean load, against 1.75-2.59%
+      for the other five). A regression of demand on irradiance shows the
+      sensitivity growing from -4.64 to -8.87 MW per W/m² between 2019 and 2025,
+      which tracks published nameplate capacity at R² 0.991. Reconstituting
+      gross load with ISO-NE's own hourly BTM series gives -10.7% MASE with
+      oracle capacity and -7.0% with a causal estimate, all of it between 10:00
+      and 15:00 local. That is worth taking, and it does not close a 0.264 gap:
+      ISO-NE also beats surge overnight, where solar cannot be the reason.
+      The design and sources are in `experiments/research_log.tsv`
 - [ ] Publish the forecast-trained checkpoint as surge-fm-v4. Low priority: it
       is about 1% better than v3 given the same covariates
 - [ ] Phase 2: LMP forecasting task, Hugging Face dataset release
