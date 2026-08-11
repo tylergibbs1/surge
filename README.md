@@ -27,15 +27,15 @@ forecast time — no future weather.*
   demand series, 14 gen-/transmission-only).
 - `surge-fm-v3` — Chronos-2 fine-tuned on 7 years × 53 BAs of load with
   temperature + calendar covariates. This is the **published** checkpoint.
-  **Test MASE 0.627** on the 2025 hold-out (macro over 53 BAs) and
-  **0.594** on the original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP);
-  **0.609 / 0.580** with the peer-BA covariates this repo now builds. Beats
-  seasonal-naive-24 by 34% overall and 43% on the RTO subset, using only
-  covariates actually available at forecast time — see
-  [Accuracy](#accuracy-vs-the-status-quo) for what that means and why
-  earlier numbers here were higher.
-  A causally re-adapted checkpoint reaches **0.597 / 0.572** but is not yet
-  released; see [roadmap](#roadmap).
+  Given real archived day-ahead weather forecasts it reaches **Test MASE
+  0.540** on the 2025 hold-out (macro over 53 BAs) and **0.536** on the
+  original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP) — beating
+  seasonal-naive-24 by 44% and 49% respectively, using only information
+  available at forecast time. Without future weather the same checkpoint
+  scores 0.627 / 0.594.
+  **How you feed it matters more than which checkpoint you use**: see
+  [Accuracy](#accuracy-vs-the-status-quo), and note that the flat-temperature
+  covariate the API shipped for months is *worse than sending none at all*.
 - `surge-fm-v2` — Previous generation, 7-BA RTO-only model. Its published
   figure was measured under the superseded protocol and has not been
   re-scored; treat it as unverified. Still available via
@@ -293,10 +293,20 @@ figures are upper bounds rather than achievable forecasts.
 - [x] Phase 2: always-on hosted demo at [surgeforecast.com](https://surgeforecast.com)
       with map + grid + live US-demand hero + now-indicator, daily bake
       to Vercel Blob, Modal fallback for on-demand inference
-- [ ] Phase 2: ASOS backfill for the 46 new BAs (Iowa Mesonet rate-limit
-      cleanup — currently zero-filled) and retrain as surge-fm-v4
-- [ ] Real HRRR/GFS weather forecasts as future covariates, used at both
-      train and inference time — the only route to the 0.572 → 0.468 gap
+- [x] Real archived day-ahead weather forecasts as a causal future covariate
+      (`surge.scrapers.openmeteo`, Open-Meteo Previous Runs API). Worth
+      −9.4% on the 53-BA macro — the single largest gain measured so far
+- [x] Weather coverage for all 53 BAs. This supersedes the ASOS backfill:
+      Open-Meteo serves any lat/lon, so the Iowa Mesonet rate-limit blocker
+      no longer gates weather coverage. The 46 previously zero-filled BAs now
+      have real temperature history *and* forecasts
+- [ ] Forecast renewables (`shortwave_radiation`, `wind_speed_100m` at the
+      same lead time) — realized wind/solar was worth a further 0.043 MASE
+- [ ] Conformal calibration. The nominal 80% band covers ~68-70% and gets
+      *worse* with every fine-tuning step, while zero-shot Chronos-2 is at
+      0.795. This is the clearest outstanding defect
+- [ ] Publish the forecast-trained checkpoint as surge-fm-v4 (only ~1% better
+      than v3 given the same covariates, so low priority)
 - [ ] Per-BA robust outlier filter (the absolute 200 GW cutoff inflates the
       MASE denominator for BANC, SPA, LGEE, SEC, TEPC)
 - [ ] Stop sending flat persistence temperature from the live API; it scores

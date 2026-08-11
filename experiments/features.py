@@ -97,13 +97,14 @@ def _calendar(ts_utc: np.ndarray) -> dict[str, np.ndarray]:
     }
 
 
-FUTURE_MODES = ("persistence", "lag24", "forecast", "analysis_only", "none", "oracle")
+FUTURE_MODES = ("persistence", "lag24", "forecast", "analysis_only",
+                "none", "oracle", "oracle_om")
 
 # Modes whose PAST temperature channel comes from Open-Meteo rather than ASOS.
 # "forecast" and its control must share the same past channel, otherwise a
 # comparison between them conflates two changes: a new future channel and a
 # new past one.
-_OPENMETEO_PAST_MODES = frozenset({"forecast", "analysis_only"})
+_OPENMETEO_PAST_MODES = frozenset({"forecast", "analysis_only", "oracle_om"})
 
 CALENDAR_KEYS = ("hour_sin", "hour_cos", "dow_sin", "dow_cos",
                  "is_weekend", "is_holiday")
@@ -148,6 +149,16 @@ def _resolve_policy(mode: str, gen_cols: list[str]) -> dict[str, str]:
         policy["temp_c"] = "forecast"
         for c in gen_cols:
             policy[c] = "past_only"
+    elif mode == "oracle_om":
+        # Perfect foresight of the SAME Open-Meteo channel the forecast mode
+        # uses. This is the meaningful ceiling for that configuration: the old
+        # "oracle" was measured against ASOS, which is zero-filled for 46 of 53
+        # BAs, so it was never a valid upper bound for a populated channel.
+        # Leaks by construction; the causal guard will reject it, which is why
+        # it can only be run through run_c2, never through research_eval.
+        policy["temp_c"] = "oracle"
+        for c_ in gen_cols:
+            policy[c_] = "past_only"
     elif mode == "analysis_only":
         # Control for "forecast": identical past channel (Open-Meteo analysis),
         # no future temperature at all. The difference between the two is
