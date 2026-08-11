@@ -1,12 +1,3 @@
-# Experiment log for the honest-accuracy + forecast-weather work (Aug 2026).
-# Tracked copy of the auto-research loop's results.tsv, which is gitignored so it
-# survives git resets during the loop. Preserved here because it is the only record
-# of what was tried and rejected, including negative results that would otherwise be
-# re-attempted: crude temperature proxies, special-day features, longer context,
-# and weight-space model soup all measured WORSE and are not dead ends worth revisiting
-# without new information.
-#
-# val_mase is validation (calendar 2024) unless status is TEST/CONFIRM (2025 hold-out).
 commit	val_mase	holdout_gap	cov_pi80	status	description
 3e92522	0.6287	-0.0681	0.7123	keep	baseline: v3 + persistence temp (all53 val)
 -	0.6091	-0.0661	0.7277	ref	reference bar: v3 + future_mode=none (no future temp at all)
@@ -56,3 +47,8 @@ feb835f	0.5930	-0.0574	0.7422	keep	exp6: 8 peer BAs, -0.4% vs 4 (diminishing ret
 -	0.5726	-	0.7793	val	special-day features on ZERO-SHOT: also worse (0.5713 without) -> features carry no signal for either model at 24h on US RTOs; KIT finding was longer horizons on German TSO load
 -	0.5804	-	0.7501	TEST	conformal OFF (rto7 test, none): cov80 0.7501, crps 375.60
 -	0.5804	-	0.8125	TEST	conformal ON (CQR, calibrated on val): cov80 0.7501->0.8125 (nominal 0.80), crps 375.60->374.40, MASE UNCHANGED. Fixes the worst defect at zero cost to point accuracy; now better calibrated than zero-shot (0.795)
+-	0.5043	-	0.7213	val	forecast temp-only (rto7 val, fresh 3-model data) crps 339.40
+-	0.4898	-	0.7133	val	forecast_full: +irradiance +100m wind +3-model spread = -2.9% vs temp-only, crps 339.40->334.54, CI[0.4781,0.5024]
+-	0.4888	-	0.7184	val	DECOMP renewables_only (rad+wind fcst): BEST, -3.1% vs temp-only 0.5043, crps 333.85
+-	0.5044	-	0.7139	val	DECOMP spread_only: 0.5044 == baseline 0.5043 -> NWP multi-model spread contributes NOTHING; also no coverage gain. Dropped from default
+-	-	-	-	note	FETS benchmark (arXiv 2604.22328) IS leakage-free (Fig4 leakage-free covariate construction, archived Open-Meteo NWP). Public code+Zenodo. Reproduced headline: chronos2 NRMSE 0.4722, tirex2 0.4738. CRUCIALLY: FETS already evaluates LoRA fine-tuned chronos2 -> NRMSE 0.5990, WORSE than zero-shot 0.4722. Independent confirmation that fine-tuning the FM is not the win. Target at h=96/ctx=2000: chronos2 MASE 0.6329 nCRPS 0.4205 PICP 0.8438

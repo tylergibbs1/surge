@@ -151,9 +151,17 @@ _OPENMETEO_PAST_MODES = frozenset({"forecast", "forecast_full",
                                   "analysis_only", "oracle_om"})
 
 # Extra forecast channels beyond temperature: causal proxies for the realized
-# wind/solar generation this repo used to leak, plus a cross-model spread that
-# says how uncertain tomorrow's weather actually is.
-FCST_EXTRA_KEYS = ("rad_fcst", "wind_fcst", "temp_spread")
+# wind/solar generation this repo used to leak.
+#
+# `temp_spread` (GFS/ICON/ECMWF disagreement) is deliberately NOT in this tuple.
+# It was measured on the 7 RTOs and does nothing: spread alone scores 0.5044 vs
+# 0.5043 for temperature alone, and adding it to the renewables channels makes
+# them slightly worse (0.4898 vs 0.4888). It did not improve interval coverage
+# either, which was the entire motivation. The likely reason is that Chronos-2
+# was never trained to read an uncertainty channel, and conformal calibration
+# already handles interval width. Still collected by the scraper, so it can be
+# revisited with a model trained to use it.
+FCST_EXTRA_KEYS = ("rad_fcst", "wind_fcst")
 
 # Toggle for the special-day features so an A/B against the previous schema is
 # possible; the covariate set changes, so results are not comparable across it.
