@@ -61,10 +61,11 @@ plt.rcParams.update({
 # ------------------------------------------------------------------
 def hero_forecast() -> Path:
     BAS = ["PJM", "CISO", "ERCO", "MISO", "NYIS", "ISNE", "SWPP"]
-    # future_mode="none" is the honest serving configuration: no future weather,
-    # which is what the README caption claims. Do not switch this to "oracle" —
-    # the chart would then show a forecast nobody can actually make.
-    bas = load_multi_ba(BAS, with_gen=False, future_mode="none")
+    # future_mode="forecast" is the honest serving configuration: a real archived
+    # day-ahead weather forecast, which is what the README caption claims. Never
+    # switch this to "oracle"/"oracle_om" — the chart would then show a forecast
+    # nobody can actually make.
+    bas = load_multi_ba(BAS, with_gen=False, future_mode="forecast")
 
     pipe = BaseChronosPipeline.from_pretrained(
         str(MODEL_PATH),
@@ -162,7 +163,7 @@ def hero_forecast() -> Path:
         + f"\n\n  Overall  {np.mean(mapes):5.2f}%\n\n"
         "Dashed line = median forecast.\n"
         "Shaded band = 80% probability interval.\n"
-        "Causal covariates only — no\nfuture weather or renewables.\n"
+        "Causal covariates only.\nDay-ahead forecast weather;\nno realized values.\n"
         "Model: Chronos-2 fine-tuned on\n53 BAs × 7 years of public data."
     )
     ax.text(0.03, 0.97, text, color=FG, fontsize=10.5, va="top",
@@ -190,13 +191,13 @@ def leaderboard() -> Path:
     # rather than carried over from the superseded run — plotting them beside
     # these bars would recreate the apples-to-oranges comparison being fixed.
     data = [
-        ("seasonal-naive-24  (baseline)",        1.0442, None,   None,   "#888"),
-        ("XGBoost hourly-binned (Roy '25)",      1.0189, None,   None,   "#ff9800"),
-        ("Chronos-2 zero-shot",                  0.6203, 0.5986, 0.6439, "#2196F3"),
-        ("surge-fm-v3",                          0.5937, 0.5742, 0.6137, "#4CAF50"),
-        ("surge-fm-v3  + peer-BA load",          0.5804, 0.5630, 0.5977, "#4CAF50"),
-        ("surge-fm-v3  + peers, re-adapted",     0.5720, 0.5555, 0.5877, "#4FC3F7"),
-        ("(perfect foresight — NOT a forecast)", 0.4683, 0.4542, 0.4822, "#7E57C2"),
+        ("seasonal-naive-24  (baseline)",          1.0442, None,   None,   "#888"),
+        ("XGBoost hourly-binned (Roy '25)",        1.0189, None,   None,   "#ff9800"),
+        ("Chronos-2 zero-shot,  no future wx",     0.6203, 0.5986, 0.6439, "#2196F3"),
+        ("surge-fm-v3,  no future wx",             0.5937, 0.5742, 0.6137, "#4CAF50"),
+        ("Chronos-2 zero-shot  + forecast wx",     0.5636, 0.5471, 0.5800, "#2196F3"),
+        ("surge-fm-v3  + forecast wx",             0.5357, 0.5212, 0.5502, "#4FC3F7"),
+        ("(perfect wx foresight - NOT a forecast)", 0.4882, 0.4761, 0.5000, "#7E57C2"),
     ]
     labels = [r[0] for r in data]
     mase = [r[1] for r in data]
@@ -226,8 +227,8 @@ def leaderboard() -> Path:
         s.set_color("#333")
     fig.text(0.01, 0.01,
              "7 US RTOs, macro MASE, 365 rolling 24h-ahead windows over calendar 2025.\n"
-             "Denominator = per-BA train seasonal-naive (m=24). No future weather or\n"
-             "renewables except the labelled perfect-foresight bar.",
+             "Denominator = per-BA train seasonal-naive (m=24). \"forecast wx\" = real archived\n"
+             "day-ahead NWP forecast (causal). Realized values used only in the labelled bar.",
              color=MUTED, fontsize=8.5, linespacing=1.5)
     fig.tight_layout(rect=[0, 0.10, 1, 1])
     path = OUT / "leaderboard.png"
@@ -240,34 +241,36 @@ def leaderboard() -> Path:
 # 3. HORIZON CURVE — MASE vs forecast horizon, with naive break-even
 # ------------------------------------------------------------------
 def horizon_curve() -> Path:
-    # Causal-covariate measurement (future_mode=none), 7 RTOs, 2025 test split.
+    # Causal measurement WITH real day-ahead forecast weather (future_mode=
+    # forecast), 7 RTOs, 2025 test split. Crossover moves to h67 from h41
+    # without weather - weather is what buys forecast horizon.
     matched = {
-        1: 0.2129,
-        6: 0.3054,
-        24: 0.572,
-        72: 0.9009,
-        168: 1.2021,
+        1: 0.2102,
+        6: 0.2986,
+        24: 0.5321,
+        72: 0.6876,
+        168: 0.806,
     }
     # Per-step MASE from the h=168 run, in order of step_ahead. Crosses the
     # seasonal-naive line (1.0) at h41 — far earlier than the leaky run suggested.
     per_step = np.array([
-        0.229, 0.284, 0.309, 0.328, 0.351, 0.369, 0.402, 0.414, 0.418, 0.424,
-        0.450, 0.484, 0.528, 0.566, 0.614, 0.671, 0.728, 0.786, 0.854, 0.896,
-        0.917, 0.924, 0.916, 0.914, 0.897, 0.856, 0.831, 0.807, 0.776, 0.751,
-        0.724, 0.716, 0.706, 0.702, 0.716, 0.740, 0.781, 0.832, 0.897, 0.968,
-        1.057, 1.148, 1.238, 1.300, 1.327, 1.335, 1.313, 1.307, 1.278, 1.206,
-        1.157, 1.099, 1.046, 1.000, 0.961, 0.935, 0.912, 0.893, 0.901, 0.918,
-        0.953, 1.008, 1.083, 1.168, 1.269, 1.363, 1.459, 1.520, 1.546, 1.544,
-        1.520, 1.506, 1.455, 1.384, 1.325, 1.264, 1.199, 1.143, 1.101, 1.070,
-        1.046, 1.027, 1.023, 1.031, 1.056, 1.112, 1.189, 1.274, 1.373, 1.478,
-        1.576, 1.643, 1.669, 1.673, 1.643, 1.636, 1.595, 1.511, 1.455, 1.382,
-        1.310, 1.254, 1.209, 1.174, 1.141, 1.115, 1.118, 1.123, 1.157, 1.215,
-        1.296, 1.383, 1.481, 1.578, 1.668, 1.727, 1.754, 1.748, 1.717, 1.699,
-        1.651, 1.583, 1.521, 1.459, 1.381, 1.322, 1.275, 1.237, 1.214, 1.193,
-        1.187, 1.187, 1.215, 1.279, 1.362, 1.446, 1.549, 1.655, 1.747, 1.807,
-        1.829, 1.824, 1.787, 1.771, 1.732, 1.643, 1.587, 1.515, 1.436, 1.376,
-        1.326, 1.284, 1.252, 1.224, 1.224, 1.228, 1.262, 1.322, 1.409, 1.498,
-        1.588, 1.684, 1.771, 1.825, 1.857, 1.854, 1.826, 1.803,
+        0.220, 0.281, 0.309, 0.336, 0.361, 0.380, 0.410, 0.413, 0.415, 0.413,
+        0.426, 0.442, 0.469, 0.509, 0.562, 0.617, 0.686, 0.724, 0.772, 0.806,
+        0.808, 0.798, 0.772, 0.760, 0.729, 0.691, 0.666, 0.644, 0.625, 0.607,
+        0.578, 0.577, 0.563, 0.563, 0.567, 0.570, 0.590, 0.633, 0.696, 0.764,
+        0.828, 0.877, 0.934, 0.972, 0.978, 0.974, 0.948, 0.932, 0.889, 0.833,
+        0.789, 0.744, 0.709, 0.679, 0.657, 0.638, 0.623, 0.603, 0.606, 0.613,
+        0.637, 0.685, 0.753, 0.828, 0.911, 0.967, 1.017, 1.057, 1.058, 1.040,
+        1.005, 0.985, 0.945, 0.891, 0.851, 0.803, 0.763, 0.732, 0.693, 0.684,
+        0.673, 0.667, 0.665, 0.666, 0.682, 0.733, 0.807, 0.882, 0.948, 1.004,
+        1.057, 1.098, 1.102, 1.091, 1.059, 1.047, 0.997, 0.931, 0.889, 0.840,
+        0.796, 0.762, 0.730, 0.707, 0.689, 0.665, 0.666, 0.672, 0.694, 0.746,
+        0.822, 0.897, 0.991, 1.043, 1.089, 1.125, 1.124, 1.106, 1.071, 1.051,
+        1.005, 0.952, 0.912, 0.862, 0.812, 0.784, 0.745, 0.729, 0.726, 0.718,
+        0.711, 0.711, 0.727, 0.785, 0.864, 0.938, 1.001, 1.061, 1.115, 1.153,
+        1.157, 1.149, 1.117, 1.103, 1.052, 0.991, 0.945, 0.895, 0.846, 0.808,
+        0.779, 0.749, 0.730, 0.703, 0.704, 0.707, 0.730, 0.787, 0.862, 0.946,
+        1.048, 1.108, 1.162, 1.199, 1.201, 1.176, 1.147, 1.129,
     ])
     xs = np.arange(1, len(per_step) + 1)
 
@@ -309,7 +312,7 @@ def horizon_curve() -> Path:
     ax.legend(loc="lower right", frameon=False, labelcolor=FG, fontsize=10)
     fig.text(0.01, 0.01,
              "Per-step MASE from a single h=168 forecast, macro over 7 US RTOs, "
-             "2025 test split, causal covariates (no future weather).",
+             "2025 test split, real day-ahead forecast weather (causal).",
              color=MUTED, fontsize=8.5)
     fig.tight_layout(rect=[0, 0.03, 1, 1])
     path = OUT / "horizon_curve.png"

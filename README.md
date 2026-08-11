@@ -336,10 +336,11 @@ was fine-tuned to trust the covariate. Crude causal substitutes
 (same-hour-yesterday, month × hour climatology) also lost to withholding
 temperature. Only a genuine forecast helps.
 
-Closing the 0.572 → 0.468 perfect-foresight gap therefore needs a *genuine*
-weather forecast — real HRRR/GFS archives (`surge.scrapers.hrrr` exists but
-is not wired into ingest) used at both training and inference time, so the
-model learns how much to trust an imperfect forecast.
+The remaining headroom is also weather: perfect foresight of the same channel
+would give another ~9% on the RTOs (0.536 → 0.488). Getting it means a better
+*forecast* — a sharper NWP model, ensemble means, or additional variables such
+as forecast irradiance and 100 m wind for the renewables signal — rather than a
+better load model.
 
 ## Status
 
