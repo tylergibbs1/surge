@@ -55,3 +55,5 @@ feb835f	0.5930	-0.0574	0.7422	keep	exp6: 8 peer BAs, -0.4% vs 4 (diminishing ret
 -	0.5605	-	0.7352	val	ENSEMBLE ref: chronos2/surge-fm-v3 alone (median-as-point, mode=none, rto7 val) CRPS 377.0
 -	0.6263	-	0.8355	val	TiRex-2 (xLSTM, native covariates) alone: 11.7% WORSE MASE than chronos2, but better calibrated (0.8355 vs 0.7352)
 -	0.5692	-	0.8208	val	50/50 cross-family ensemble: WORSE than chronos2 (0.5692 vs 0.5605), won 2/7 BAs. Weaker member drags it down. Coverage 0.8208 near-nominal but conformal gets that at ZERO MASE cost -> ensemble dominated
+-	0.5053	-	0.7077	TEST	MULTI-POINT WEATHER (4-6 metro load centres/BA vs 1 centroid): rto7 test macro 0.5357->0.5053 = -5.7%, ALL 7 BAs improved. Biggest gains exactly where footprint largest: PJM -10.9% (13 states), ISNE -7.8% (centroid was in NH, load in Boston/Hartford). MAE 1004.5
+-	-	-	-	note	vs operators w/ multi-point: 6/7 wins, macro 0.5053 vs 0.8799 (42.6% better). ISO-NE still lost: 0.603 vs their 0.339. Weather granularity was NOT ISO-NE's main problem
