@@ -37,6 +37,10 @@ dev = [
     "pytest-vcr>=1.0",
     "ruff>=0.6",
     "mypy>=1.10",
+    # tests/test_conformal.py exercises the quantile arithmetic directly. CI
+    # installs only [dev], so numpy has to be here or that module fails to
+    # collect.
+    "numpy>=1.26",
 ]
 weather = ["herbie-data>=2024.3", "cdsapi>=0.7"]
 cli = ["typer>=0.12", "rich>=13.7"]
@@ -51,6 +55,10 @@ api = [
     # files; pinning >=2.6 forces the safe default.
     "torch>=2.6",
     "holidays>=0.55",
+    # forecaster.py and conformal.py use it directly. It arrived only as a
+    # transitive dependency of torch, so a torch that stopped vendoring it
+    # would break serving.
+    "numpy>=1.26",
 ]
 all = ["surge[dev,weather,cli,api]"]
 
