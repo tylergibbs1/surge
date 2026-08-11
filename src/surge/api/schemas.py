@@ -20,8 +20,10 @@ class ForecastPoint(BaseModel):
     p90_mw: float = Field(..., description="90th percentile — upper end of 80% PI")
     temp_c: float | None = Field(
         None,
-        description="Future-covariate temperature at BA centroid station (°C). "
-        "Assumes perfect forecast — see README Limitations.",
+        description="Day-ahead forecast temperature at the BA centroid (°C), as "
+        "supplied to the model. This is a real NWP forecast (Open-Meteo/GFS), "
+        "not an observation — null when no forecast was available, in which case "
+        "the forecast was produced without future weather.",
     )
 
 

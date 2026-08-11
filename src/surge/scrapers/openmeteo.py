@@ -110,6 +110,58 @@ def _fetch_window(lat: float, lon: float, start: date, end: date,
     )
 
 
+LIVE_BASE = "https://api.open-meteo.com/v1/forecast"
+
+
+def live_forecast(ba: str, *, past_days: int = 7, forecast_days: int = 2,
+                  model: str = "gfs_seamless") -> pl.DataFrame:
+    """Current weather forecast for `ba`'s centroid: recent past + next hours.
+
+    For serving, not for benchmarking. Returns one coherent series covering both
+    sides of "now" from a single model run, so the history the model sees and the
+    forecast it is given come from the same source — mixing an observation
+    station's history with a model-grid forecast leaves a step change exactly at
+    the forecast boundary.
+
+    Columns: ts_utc, temp_c, rad_wm2, wind100.
+    """
+    meta = _bas.get(ba)
+    lon, lat = meta.centroid
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": "temperature_2m,shortwave_radiation,wind_speed_100m",
+        "past_days": int(past_days),
+        "forecast_days": int(forecast_days),
+        "models": model,
+        "timezone": "UTC",
+    }
+    with client() as c:
+        r = get(c, LIVE_BASE, params=params, timeout=30.0)
+    h = (r.json() or {}).get("hourly") or {}
+    times = h.get("time") or []
+    if not times:
+        return pl.DataFrame(schema={"ts_utc": pl.Datetime(time_zone="UTC"),
+                                    "temp_c": pl.Float64, "rad_wm2": pl.Float64,
+                                    "wind100": pl.Float64})
+    n = len(times)
+    return (
+        pl.DataFrame({
+            "ts_utc": times,
+            "temp_c": h.get("temperature_2m") or [None] * n,
+            "rad_wm2": h.get("shortwave_radiation") or [None] * n,
+            "wind100": h.get("wind_speed_100m") or [None] * n,
+        })
+        .with_columns(
+            pl.col("ts_utc").str.to_datetime().dt.replace_time_zone("UTC"),
+            pl.col("temp_c").cast(pl.Float64),
+            pl.col("rad_wm2").cast(pl.Float64),
+            pl.col("wind100").cast(pl.Float64),
+        )
+        .sort("ts_utc")
+    )
+
+
 def fetch_ba(ba: str, start: date, end: date, *, lead_days: int = 1,
              model: str = "gfs_seamless", persist: bool = True) -> pl.DataFrame:
     """Day-ahead forecast temperature for `ba`'s centroid over [start, end]."""

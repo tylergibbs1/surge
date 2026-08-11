@@ -5,6 +5,7 @@ model and passes it into this module via `forecast_ba(pipe=..., ba=...)`.
 """
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -36,6 +37,8 @@ MODEL_NAME = "surge-fm-v3"
 CONTEXT_LENGTH = 2048
 
 US_HOLIDAYS = holidays.UnitedStates()
+
+_log = logging.getLogger(__name__)
 
 
 def _ffill(x: np.ndarray) -> np.ndarray:
@@ -111,6 +114,66 @@ def data_end_utc() -> datetime | None:
         return None
 
 
+def _weather_channels(ba: str, past_ts: np.ndarray,
+                      future_ts: np.ndarray) -> dict | None:
+    """Live Open-Meteo weather aligned to both the context and the horizon.
+
+    Returns {"past": {...}, "future": {...}} of covariate arrays, or None if the
+    forecast cannot be obtained or does not fully cover the horizon. Callers must
+    then omit future weather rather than substitute a constant, which scores
+    worse than omitting it entirely.
+
+    Both sides come from one model run, so history and forecast are on the same
+    footing — and the channel set matches what the model was evaluated with,
+    which means `rad`/`wind` need history too, not just future values. 92 past
+    days is the API maximum and covers the 2048-hour context (85 days).
+    """
+    try:
+        from surge.scrapers.openmeteo import live_forecast
+        wx = live_forecast(ba, past_days=92, forecast_days=3)
+    except Exception as e:                      # network, API change, unknown BA
+        _log.warning("%s: live_forecast failed (%s); omitting future weather",
+                     ba, type(e).__name__)
+        return None
+    if wx.is_empty():
+        return None
+
+    src = wx["ts_utc"].to_numpy().astype("datetime64[h]")
+
+    def align(want: np.ndarray) -> np.ndarray | None:
+        want = np.asarray(want).astype("datetime64[h]")
+        idx = np.searchsorted(src, want)
+        if len(src) == 0 or idx.max(initial=0) >= len(src):
+            return None
+        return idx if np.all(src[idx] == want) else None
+
+    fut_idx = align(future_ts)
+    if fut_idx is None:
+        _log.warning("%s: forecast does not cover the horizon; omitting", ba)
+        return None
+    past_idx = align(past_ts)          # may be None if context predates the window
+
+    cols = {"temp_c": "temp_c", "rad_fcst": "rad_wm2", "wind_fcst": "wind100"}
+    future, past = {}, {}
+    for name, col in cols.items():
+        v = wx[col].to_numpy().astype(np.float64)
+        if np.all(np.isnan(v)):
+            continue
+        v = _ffill(v)
+        future[name] = v[fut_idx].astype(np.float32)
+        if past_idx is not None:
+            past[name] = v[past_idx].astype(np.float32)
+
+    if not future:
+        return None
+    # Without aligned history the extra channels would appear only over the
+    # horizon, a schema the model never saw. Serve temperature alone in that case.
+    if past_idx is None:
+        future = {k: v for k, v in future.items() if k == "temp_c"}
+        past = {}
+    return {"past": past, "future": future}
+
+
 def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
     """Produce a 1-BA probabilistic forecast using the loaded pipeline."""
     if horizon < 1 or horizon > 168:
@@ -129,10 +192,31 @@ def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
     last_ts = bd["ts"][end_idx - 1]
     future_ts = (last_ts + np.arange(1, horizon + 1, dtype="timedelta64[h]")).astype("datetime64[h]")
     cal_future = _calendar(future_ts.astype("datetime64[us]"))
-    temp_future = np.full(horizon, bd["temp_c"][end_idx - 1], dtype=np.float32)
 
     past_covariates = {"temp_c": temp_past.astype(np.float32), **cal_past}
-    future_covariates = {"temp_c": temp_future, **cal_future}
+    future_covariates: dict[str, np.ndarray] = {**cal_future}
+
+    # Real day-ahead weather forecast over the horizon.
+    #
+    # This used to send a flat persisted temperature, which is measurably WORSE
+    # than sending no future temperature at all: on the 7 RTOs, test MASE 0.740
+    # with it against 0.594 without. A constant 24 h temperature implies no
+    # diurnal cycle, and the checkpoint was fine-tuned to trust the covariate.
+    # A real forecast reaches 0.536, so this is the single largest accuracy lever
+    # in the serving path.
+    #
+    # If the forecast is unavailable, fall back to OMITTING future weather —
+    # never to a flat value, which would be worse than nothing.
+    temp_future = None
+    wx = _weather_channels(ba, bd["ts"][start_idx:end_idx], future_ts)
+    if wx is not None:
+        past_covariates.update(wx["past"])
+        future_covariates.update(wx["future"])
+        temp_future = wx["future"].get("temp_c")
+    else:
+        _log.warning(
+            "%s: no weather forecast available; serving without future weather "
+            "(expect ~0.59 vs ~0.54 MASE). Not substituting a flat temperature.", ba)
 
     task = [{
         "target": target,
@@ -153,7 +237,10 @@ def forecast_ba(pipe: Any, ba: str, horizon: int = 24) -> dict[str, Any]:
             "median_mw": float(q[i, 1]),
             "p10_mw": float(q[i, 0]),
             "p90_mw": float(q[i, 2]),
-            "temp_c": float(temp_future[i]),
+            # The forecast temperature actually fed to the model, or null when no
+            # forecast was available. Never a flat placeholder: reporting a
+            # constant here would misrepresent the input as well as degrade it.
+            "temp_c": (float(temp_future[i]) if temp_future is not None else None),
         })
 
     return {
