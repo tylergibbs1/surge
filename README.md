@@ -1,5 +1,7 @@
 # surge
 
+[![ci](https://github.com/tylergibbs1/surge/actions/workflows/ci.yml/badge.svg)](https://github.com/tylergibbs1/surge/actions/workflows/ci.yml)
+
 **Open, probabilistic day-ahead load forecasts for the US power grid.**
 
 A fine-tuned Chronos-2 foundation model + FastAPI service + hosted
@@ -18,54 +20,17 @@ features. Dashed line = median forecast, shaded band = 80% probability
 interval, solid = actual. Forecasts use only information available at
 forecast time — no future weather.*
 
-## What it is
-
-- `surge` — Python library for pulling and harmonising US grid data
-  (EIA-930 load, ASOS temperature, wind/solar generation, CAISO OASIS,
-  ERCOT public reports, NOAA storm events). Central BA registry in
-  `surge.bas` tracks all 67 EIA-930 balancing authorities (53 with a
-  demand series, 14 gen-/transmission-only).
-- `surge-fm-v3` — Chronos-2 fine-tuned on 7 years × 53 BAs of load with
-  temperature + calendar covariates. This is the **published** checkpoint.
-  Given real archived day-ahead weather forecasts it reaches **Test MASE
-  0.540** on the 2025 hold-out (macro over 53 BAs) and **0.536** on the
-  original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP). This beats
-  seasonal-naive-24 by 44% and 49%, and uses only information available at
-  forecast time. Without future weather the same checkpoint scores
-  0.627 / 0.594.
-  **How you feed it matters more than which checkpoint you use**: see
-  [Accuracy](#accuracy-vs-the-status-quo), and note that the flat-temperature
-  covariate the API shipped for months is *worse than sending none at all*.
-- `surge-fm-v2` — Previous generation, 7-BA RTO-only model. Its published
-  figure was measured under the superseded protocol and has not been
-  re-scored. Treat it as unverified. Still available via
-  `SURGE_MODEL_PATH`.
-- `surge.api` — FastAPI inference service with NDJSON streaming and OpenAPI docs.
-- `web/playground` — Next.js playground at **surgeforecast.com**. Four
-  coordinated views over the same data:
-    * **Map** — MapLibre US choropleth, colour-coded by interconnect,
-      pins sized by current load. Click any BA to drill into its chart.
-    * **Grid** (`/grid`) — 53 BA cards sortable by % of all-time peak,
-      peak GW, or name. Filters for interconnection (Eastern/Western/
-      Texas) and size tier (RTO / major utility / small). Each card
-      shows a 24 h sparkline and a traffic-light status dot.
-    * **Live hero** — [Liveline](https://github.com/benjitaylor/liveline)
-      canvas chart of rolling 24 h US aggregate demand (~165 GW
-      overnight, ~240 GW on a summer afternoon), polling
-      `/api/live-load` every 60 s with a visibility-gated interval and
-      keep-last-good fallback on transient 502s.
-    * **Now indicator** on each BA's forecast chart — a dashed vertical
-      line + pulsing SVG dot at the current hour, sliding rightward
-      through the 24 h window once a minute.
-- Daily "bake" — `/api/bake` regenerates the full forecast set at
-  06:15 UTC and writes `forecasts/{BA}.json` + `forecasts/all.json`
-  to Vercel Blob. The read-side tries the blob first (~300 ms edge-
-  cached) and falls through to live Modal inference on miss or
-  `?force=1` (~3 s cold).
-
 ## Quick start
 
+The fastest way to see it is the hosted playground at
+[surgeforecast.com](https://surgeforecast.com). To run it yourself:
+
 ### Library
+
+```bash
+pip install -e .
+export EIA_API_KEY=...   # free key: https://www.eia.gov/opendata/register.php
+```
 
 ```python
 import surge
@@ -108,6 +73,51 @@ Response:
   ]
 }
 ```
+
+## What's included
+
+- **`surge`**: Python library for pulling and harmonising US grid data
+  (EIA-930 load, ASOS temperature, wind/solar generation, CAISO OASIS,
+  ERCOT public reports, NOAA storm events). Central BA registry in
+  `surge.bas` tracks all 67 EIA-930 balancing authorities (53 with a
+  demand series, 14 gen-/transmission-only).
+- **`surge-fm-v3`**: Chronos-2 fine-tuned on 7 years × 53 BAs of load with
+  temperature + calendar covariates. This is the **published** checkpoint.
+  Given real archived day-ahead weather forecasts it reaches **Test MASE
+  0.540** on the 2025 hold-out (macro over 53 BAs) and **0.536** on the
+  original 7 RTOs (PJM/CAISO/ERCOT/MISO/NYISO/ISO-NE/SPP). This beats
+  seasonal-naive-24 by 44% and 49%, and uses only information available at
+  forecast time. Without future weather the same checkpoint scores
+  0.627 / 0.594.
+  **How you feed it matters more than which checkpoint you use**: see
+  [Accuracy](#accuracy-vs-the-status-quo), and note that the flat-temperature
+  covariate the API shipped for months is *worse than sending none at all*.
+- **`surge-fm-v2`**: previous generation, 7-BA RTO-only model. Its published
+  figure was measured under the superseded protocol and has not been
+  re-scored. Treat it as unverified. Still available via
+  `SURGE_MODEL_PATH=Tylerbry1/surge-fm-v2`.
+- **`surge.api`**: FastAPI inference service with NDJSON streaming and OpenAPI docs.
+- **`web/playground`**: Next.js playground at **surgeforecast.com**. Four
+  coordinated views over the same data:
+    * **Map** — MapLibre US choropleth, colour-coded by interconnect,
+      pins sized by current load. Click any BA to drill into its chart.
+    * **Grid** (`/grid`) — 53 BA cards sortable by % of all-time peak,
+      peak GW, or name. Filters for interconnection (Eastern/Western/
+      Texas) and size tier (RTO / major utility / small). Each card
+      shows a 24 h sparkline and a traffic-light status dot.
+    * **Live hero** — [Liveline](https://github.com/benjitaylor/liveline)
+      canvas chart of rolling 24 h US aggregate demand (~165 GW
+      overnight, ~240 GW on a summer afternoon), polling
+      `/api/live-load` every 60 s with a visibility-gated interval and
+      keep-last-good fallback on transient 502s.
+    * **Now indicator** on each BA's forecast chart — a dashed vertical
+      line + pulsing SVG dot at the current hour, sliding rightward
+      through the 24 h window once a minute.
+- **Daily "bake"**: `/api/bake` regenerates the full forecast set at
+  06:15 UTC and writes `forecasts/{BA}.json` + `forecasts/all.json`
+  to Vercel Blob. The read-side tries the blob first (~300 ms edge-
+  cached) and falls through to live Modal inference on miss or
+  `?force=1` (~3 s cold).
 
 ## Accuracy vs. the status quo
 
@@ -253,15 +263,16 @@ Two further caveats worth stating plainly:
 
 - **Calibration is imperfect.** The nominal 80% interval covers ~76% in
   practice. The model is mildly overconfident.
-- **Five BAs have inflated MASE denominators.** The outlier filter clips
-  only `load_mw > 200_000`, an absolute threshold, so a 70 GW spike in a
-  1.8 GW BA survives and inflates that BA's denominator (BANC by ~60×).
-  BANC, SPA, LGEE, SEC and TEPC are affected. If you exclude them, the 53-BA
-  macro is ~0.673 rather than 0.597. Fixing this is pending.
+- **Five BAs had inflated MASE denominators.** The original outlier filter
+  clipped only `load_mw > 200_000`, an absolute threshold, so a 70 GW spike
+  in a 1.8 GW BA survived and inflated that BA's denominator (BANC by ~60×).
+  BANC, SPA, LGEE, SEC and TEPC were affected. Excluding them moved the 53-BA
+  macro from 0.597 to ~0.673 at the time. The per-BA robust filter in
+  `surge.clean` now replaces that rule (see [Roadmap](#roadmap)).
 
 ### vs. the grid operators' own forecasts
 
-**Surge beats EIA's day-ahead demand forecast on 4 of 7 major RTOs.**
+**Surge beats EIA's day-ahead demand forecast on 6 of 7 major RTOs** (two of them by a hair).
 
 Every RTO/ISO submits a day-ahead load forecast to EIA each morning. That is
 the *production* forecast used to schedule generation. We pull the operator
@@ -271,9 +282,7 @@ denominator surge uses — 8,760 hours per BA, ~61,000 hours total.
 
 This comparison is only meaningful if both sides face the same uncertainty.
 The operators had to *forecast* weather and renewable output when they
-submitted. Surge is therefore scored with causal covariates only. An earlier
-version of this table claimed 6 of 7 wins by giving surge realized weather
-and realized wind/solar — a handicap the operators did not get.
+submitted. Surge is therefore scored with causal covariates only.
 
 | Region | Surge MAE | Operator MAE | Ratio | Surge MASE | Operator MASE |
 |---|---:|---:|---:|---:|---:|
@@ -299,12 +308,16 @@ ties (1.01× and 1.04×). Two operator submissions, **CAISO (1.66) and SPP
 An earlier version of this table claimed 6 of 7 by handing surge *realized*
 weather and *realized* wind and solar — a handicap the operators never got.
 Stripping that took it to 4 of 7. Real day-ahead forecast weather brings it
-back to 6 of 7 legitimately. The original claim happened to be about right.
+back to 6 of 7 legitimately. The original claim happened to be about right;
 the evidence for it was not.
 
 Reproduce: `python scripts/compare_eia_df.py --start 2025-01-01 --end 2026-01-01`
-for the operator side, then `python -m experiments.run_c2 rto7
-'{"on":"test","future_mode":"none"}'` for surge's.
+for the operator side, then for surge's (needs a CUDA GPU and the forecast
+weather backfill above):
+
+```bash
+python -m experiments.run_c2 rto7 '{"base":"Tylerbry1/surge-fm-v3","bas":["PJM","CISO","ERCO","MISO","NYIS","ISNE","SWPP"],"on":"test","future_mode":"forecast"}'
+```
 
 ## How far ahead can it forecast?
 
@@ -348,19 +361,6 @@ Pre-release, hosted demo live. The API runs locally from a one-line
 `uvicorn`, the 53-BA checkpoint auto-downloads from Hugging Face on
 first request, and the playground at [surgeforecast.com](https://surgeforecast.com)
 is open to anyone. See the [roadmap](#roadmap).
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-## Disclaimer
-
-Research and reference use only. **Not for trading, regulated bidding, or
-bankability-graded decisions.** No SLA. Accuracy numbers are measured on a
-specific 2025 hold-out and can differ for future extreme events.
-Every figure states the covariate regime it was measured under. Numbers
-taken under different regimes are not comparable, and the perfect-foresight
-figures are upper bounds rather than achievable forecasts.
 
 ## Roadmap
 
@@ -425,3 +425,31 @@ changes made no difference or made results worse: weight-space checkpoint
 averaging, a cross-model NWP spread covariate, longer context, bridge-day and
 holiday-proximity features, and a Chronos-2 + TiRex-2 ensemble. Every measured
 gain so far has come from the data and the protocol instead.
+
+## Development
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev,api]"
+ruff check src tests
+mypy src
+pytest
+```
+
+CI runs the same three checks on Python 3.11 and 3.12. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for API keys, what belongs in git, and
+publishing.
+
+## Disclaimer
+
+Research and reference use only. **Not for trading, regulated bidding, or
+bankability-graded decisions.** No SLA. Accuracy numbers are measured on a
+specific 2025 hold-out and can differ for future extreme events.
+Every figure states the covariate regime it was measured under. Numbers
+taken under different regimes are not comparable, and the perfect-foresight
+figures are upper bounds rather than achievable forecasts.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
